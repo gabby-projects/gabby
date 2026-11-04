@@ -9,7 +9,6 @@ Gabby executes configured AI agents within explicit runtime boundaries. It manag
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15741/badge)](https://www.bestpractices.dev/projects/15741)
 
 [Documentation](docs/index.md) · [Architecture](docs/ARCHITECTURE.md) · [Quick start](#quick-start) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
@@ -91,3 +90,5 @@ Gabby is pre-1.0 alpha software. Public extension APIs may change before v1.0. L
 Gabby is maintained as part of the [Undreamt](https://github.com/undreamt-hq) open-source community and follows the shared OSS maintenance baseline used by Orbit Core. Contributions are welcome across runtime behavior, providers, documentation, examples, accessibility, security, and developer experience.
 
 Before contributing, read the [contributing guide](CONTRIBUTING.md), [governance](GOVERNANCE.md), and [security policy](SECURITY.md). See the [documentation index](docs/index.md) for architecture, extension contracts, operations, and release guidance.
+
+<a href="https://www.bestpractices.dev/projects/15741"><img src="https://www.bestpractices.dev/projects/15741/badge"></a> 
