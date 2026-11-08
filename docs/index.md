@@ -65,6 +65,8 @@ Core's OSS maintenance baseline while keeping its agent-runtime contracts projec
 
 - [Contributing](../CONTRIBUTING.md) — development environment, required checks, and change
   expectations.
+- [AI usage guide](AI_USAGE.md) — responsible use of AI tools while contributing, including review,
+  validation, and data protection.
 - [Repository governance](REPOSITORY_GOVERNANCE.md) — shared Orbit Projects OSS baseline and
   repository settings maintainers must verify.
 - [Release procedure](RELEASING.md) — tag validation, build, attestations, and PyPI publishing.

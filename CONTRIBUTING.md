@@ -4,6 +4,9 @@ Gabby is an agent construction and runtime framework. Contributions should prese
 between reusable agent definitions and transient executions, and must not imply that prompting or
 retrieval modifies model weights.
 
+Contributors may use AI tools as assistants, but remain responsible for reviewing and validating
+their changes. Follow the [AI usage guide](docs/AI_USAGE.md) when using AI during development.
+
 ## Before changing code
 
 Read the [architecture draft](docs/ARCHITECTURE.md), the relevant user guide, and any accepted
