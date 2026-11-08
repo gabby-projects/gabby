@@ -66,7 +66,7 @@ Gabby’s controls are not all enabled by default. Skill signing is optional, sa
 Clone the repository, then sync the locked development environment:
 
 ```sh
-git clone https://github.com/orbit-projects/gabby.git
+git clone https://github.com/undreamt-oss/gabby.git
 cd gabby
 uv sync --frozen --group dev --extra server --extra auth
 ```
@@ -93,6 +93,6 @@ Gabby is pre-1.0 alpha software. Public extension APIs may change before v1.0. L
 
 ## Open source and contributing
 
-Gabby is maintained as part of the [Undreamt](https://github.com/undreamt-hq) open-source community and follows the shared OSS maintenance baseline used by Orbit Core. Contributions are welcome across runtime behavior, providers, documentation, examples, accessibility, security, and developer experience.
+Gabby is maintained in the [undreamt-oss](https://github.com/undreamt-oss) organization. Orbit is a separate ecosystem and is not Gabby's parent organization. Contributions are welcome across runtime behavior, providers, documentation, examples, accessibility, security, and developer experience.
 
 Before contributing, read the [contributing guide](CONTRIBUTING.md), [governance](GOVERNANCE.md), and [security policy](SECURITY.md). See the [documentation index](docs/index.md) for architecture, extension contracts, operations, and release guidance.

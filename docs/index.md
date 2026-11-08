@@ -8,10 +8,10 @@ It is designed to complement orchestration frameworks such as LangChain, CrewAI,
 those frameworks can coordinate agents and workflows, while Gabby supplies governed execution for
 configured agent requests. Gabby is not intended to replace the host application's orchestration layer.
 
-Gabby follows the Orbit Projects documentation conventions: the README introduces the project,
-architecture documents explain ownership and contracts, focused guides explain a capability, and
-the roadmap and scorecard separate implementation from release evidence. The project shares Orbit
-Core's OSS maintenance baseline while keeping its agent-runtime contracts project-specific.
+Gabby is maintained in the `undreamt-oss` GitHub organization. Orbit is a separate ecosystem and is
+not Gabby's parent organization. The README introduces the project, architecture documents explain
+ownership and contracts, focused guides explain capabilities, and the roadmap and scorecard separate
+implementation from release evidence.
 
 ## Start here
 
@@ -67,8 +67,8 @@ Core's OSS maintenance baseline while keeping its agent-runtime contracts projec
   expectations.
 - [AI usage guide](AI_USAGE.md) — responsible use of AI tools while contributing, including review,
   validation, and data protection.
-- [Repository governance](REPOSITORY_GOVERNANCE.md) — shared Orbit Projects OSS baseline and
-  repository settings maintainers must verify.
+- [Repository governance](REPOSITORY_GOVERNANCE.md) — Gabby's contribution safeguards and repository
+  settings maintainers must verify.
 - [Release procedure](RELEASING.md) — tag validation, build, attestations, and PyPI publishing.
 - [Project roadmap](../ROADMAP.md) and [readiness scorecard](PROJECT_SCORECARD.md) — current
   implementation evidence and open release gates.

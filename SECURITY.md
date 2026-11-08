@@ -1,7 +1,7 @@
 # Security policy
 
 Please report suspected vulnerabilities privately through
-[GitHub Security Advisories](https://github.com/orbit-projects/gabby/security/advisories/new) rather
+[GitHub Security Advisories](https://github.com/undreamt-oss/gabby/security/advisories/new) rather
 than opening a public issue. If private vulnerability reporting is unavailable, contact the project
 maintainers privately before sharing exploit details.
 
