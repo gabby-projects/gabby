@@ -1,6 +1,7 @@
 -- Gabby PostgreSQL vector store, schema version 1.
 -- Apply through the host application's migration system before constructing the adapter.
 -- The migration role must be permitted to install pgvector when it is not already available.
+-- Replace __GABBY_VECTOR_DIMENSIONS__ with the embedding model's dimension before applying.
 
 CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
 
@@ -32,7 +33,7 @@ CREATE TABLE IF NOT EXISTS gabby_vector_documents (
     source TEXT NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     generation TEXT,
-    embedding vector NOT NULL,
+    embedding vector(__GABBY_VECTOR_DIMENSIONS__) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     CHECK (jsonb_typeof(metadata) = 'object'),

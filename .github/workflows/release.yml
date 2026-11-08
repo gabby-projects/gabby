@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install uv==0.12.23
+      - run: python -m pip install uv==0.13.5
       - if: runner.os != 'Windows'
         run: uv sync --frozen --group dev --extra server --extra auth --extra observability --extra skill-signing --extra pdf-ocr --extra parquet --extra mcp --python '${{ matrix.python-version }}'
       - if: runner.os == 'Windows'
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
-      - run: python -m pip install uv==0.12.23
+      - run: python -m pip install uv==0.13.5
       - run: uv sync --frozen --group dev --extra server --extra auth --extra observability --extra skill-signing --python '3.14'
       - name: Start and verify Docker daemon
         run: |
@@ -79,7 +79,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install uv==0.12.23
+      - run: python -m pip install uv==0.13.5
       - run: uv sync --frozen --group dev --extra server --extra auth --extra transformers --extra observability --extra skill-signing --extra pdf-ocr --extra parquet --extra windows-sandbox --extra mcp --python '${{ matrix.python-version }}'
       - run: uv lock --check
       - run: uv run --no-sync ruff check src tests scripts examples
@@ -118,7 +118,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
-      - run: python -m pip install uv==0.12.23
+      - run: python -m pip install uv==0.13.5
       - run: uv build --out-dir dist
       - name: Verify release archive contents and license
         run: python scripts/check_package.py dist
