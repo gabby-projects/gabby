@@ -170,7 +170,7 @@ def main() -> int:
         for command in (
             "ruff check src tests scripts examples",
             "ruff format --check src tests scripts examples",
-            "mypy src/gabby tests scripts examples",
+            "mypy --python-version '${{ matrix.python-version }}' src/gabby tests scripts examples",
         ):
             if command not in ci_quality:
                 failures.append(f"CI quality job must include examples in {command.split()[0]}.")
@@ -311,7 +311,7 @@ def main() -> int:
         for command in (
             "ruff check src tests scripts examples",
             "ruff format --check src tests scripts examples",
-            "mypy src/gabby tests scripts examples",
+            "mypy --python-version '${{ matrix.python-version }}' src/gabby tests scripts examples",
         ):
             if command not in release_quality:
                 failures.append(
@@ -341,7 +341,7 @@ def main() -> int:
         security = security_path.read_text(encoding="utf-8")
         for required in (
             "permissions: read-all",
-            "ossf/scorecard-action@55891bbd73f2425e97637d96e306fc9d491d0b21",
+            "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
             "github/codeql-action/upload-sarif@",
             "publish_results: true",
         ):

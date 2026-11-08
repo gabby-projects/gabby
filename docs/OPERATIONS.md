@@ -360,7 +360,9 @@ Gabby includes `PostgresVectorStore` for pgvector deployments. The database admi
 install pgvector 0.8.0 or newer before applying `sql/postgres_vector.sql`; replace
 `__GABBY_VECTOR_DIMENSIONS__` in that migration with the embedding model's dimension first. The
 migration role must have permission to create the extension when it is absent. Configure every
-`PostgresVectorStore` with the same dimension and embedding space used by the migration.
+`PostgresVectorStore` with the same dimension and embedding space used by the migration. The
+migration seeds that dimension in the store configuration, so a worker with a mismatched setting
+fails closed instead of setting the shared dimension on first use.
 HNSW supports up to 2,000 dimensions; choose a different `VectorStore` backend for embeddings above
 that limit. Search enables strict-order iterative scans to compensate when metadata or generation
 filters remove nearest candidates. Results can still be limited by the configured maximum scan
