@@ -56,6 +56,23 @@ provider fakes and local ASGI clients.
 
 ## Change requirements
 
+Use the commit message format `<type>: <imperative summary>` for every commit. Keep the type
+lowercase, use a concise imperative summary, and omit the final period. Common types include
+`docs`, `feat`, `fix`, `refactor`, `test`, `build`, `ci`, and `chore`.
+
+Examples:
+
+```text
+docs: clarify Gabby's project positioning
+feat: add bounded tool result handling
+fix: preserve cancellation during stream cleanup
+refactor: isolate provider response parsing
+test: cover concurrent tool cancellation
+build: pin the container base image
+ci: validate supported Python versions
+chore: refresh maintainer references
+```
+
 Public classes and functions exported from `gabby` need precise annotations and concise docstrings.
 Module docstrings state the module boundary. The documentation checker also verifies Markdown
 headings, code fences, local links, and stale-work markers in comments. Comments explain ownership,
