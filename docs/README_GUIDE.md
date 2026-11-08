@@ -1,6 +1,6 @@
 # Gabby User Guide
 
-This guide contains the installation, configuration, provider, skill, runtime, knowledge, tool, and API details formerly included in the repository README. The top-level README is the project overview and quick-start entry point.
+This guide explains how to use Gabby's agent runtime and governance capabilities: installation, configuration, providers, skills, runtime policies, knowledge, tools, and APIs. The top-level README is the project overview and quick-start entry point.
 
 ## Install
 

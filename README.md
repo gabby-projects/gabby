@@ -2,9 +2,9 @@
 
 # Gabby
 
-### A stateless agent execution runtime
+### An Agent Runtime and Governance Framework
 
-Gabby executes configured AI agents within explicit runtime boundaries. It manages model calls, skills, tools, knowledge retrieval, verification, and policies for each request, then returns a result without owning the consuming application's conversation history or durable user state.
+Gabby helps developers define what an AI agent can do, govern how it uses tools, and execute each request within explicit limits. It combines reusable agent and skill definitions with policy checks, optional approvals and verification, bounded tool execution, and traceable results. Gabby is stateless between runs: the consuming application owns conversation history and durable user state.
 
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -19,9 +19,11 @@ Gabby executes configured AI agents within explicit runtime boundaries. It manag
 
 ## About
 
-Gabby is for developers who need a reusable runtime boundary around agent execution. A host application supplies the request and any context or memory it wants the agent to use. Gabby runs the configured agent, enforces its runtime contracts, and returns the output and optional trace. Execution state is temporary; persistence remains with the host by default.
+Gabby is for developers who need a consistent way to configure agent capabilities, govern tool access, and execute agent work. A host application supplies a request and any context or memory it wants the agent to use. Gabby validates the agent definition, applies its configured runtime contracts, executes model and tool calls within the configured bounds, and returns the output and optional trace. Execution state is temporary; persistence remains with the host by default.
 
 The runtime is asynchronous first, with synchronous convenience methods and a FastAPI service. The same agent definition can be used from Python, through the versioned HTTP API, or as a local MCP server. Model providers, tools, retrieval, policy engines, verification, and tracing are replaceable through Python interfaces.
+
+Gabby governs agent execution inside the runtime. It is not a hosted multi-tenant control plane, an identity-management system, or the owner of application conversations and durable memory. Host applications remain responsible for caller identity, long-term state, and deployment-level isolation. See the [architecture](docs/ARCHITECTURE.md) and [threat model](docs/THREAT_MODEL.md) for these boundaries.
 
 ## Architecture
 
@@ -30,16 +32,17 @@ Host application
   ├── owns conversation history and durable state
   └── sends request + selected context
         ↓
-Gabby stateless execution runtime
+Gabby governance and execution runtime
   ├── resolved agent definition and skills
   ├── model provider and knowledge retrieval
-  ├── policy checks, tool execution, verification
+  ├── policy checks and bounded tool execution
+  ├── optional approvals and verification
   └── bounded result and optional trace
         ↓
 Host application
 ```
 
-An agent definition composes a model, environment, skills, tools, knowledge sources, instructions, policies, and verification. At construction, Gabby validates and resolves configuration into an immutable execution plan. Each run receives its own transient state and ends with a result; it does not implicitly create a chat session or persistent memory.
+An agent definition composes a model, environment, skills, tools, knowledge sources, instructions, policies, and verification. At construction, Gabby validates and resolves configuration into an immutable execution plan. Each run receives its own transient state and ends with a result; it does not implicitly create a chat session or persistent memory. Stateless execution is the runtime's state-ownership model; governance and controlled tool execution are the product's central purpose.
 
 ## Runtime capabilities
 

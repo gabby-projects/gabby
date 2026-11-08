@@ -1,16 +1,19 @@
 # Roadmap
 
-This roadmap separates current implementation from work needed before Gabby can make stronger
-production claims. Dates are omitted; each step depends on reviewable behavior and evidence.
+Gabby's product is an Agent Runtime and Governance Framework. The roadmap separates
+the controls and execution capabilities available today from work needed to strengthen those
+contracts and support production claims. Dates are omitted; each step depends on reviewable behavior
+and evidence.
 
-## Agent engineering direction
+## Longer-term agent engineering direction
 
-Gabby's product direction is to make an agent's behavior and construction lifecycle explicit and
-revisable. The current alpha supplies behavioral controls through instructions, skills, planners,
-selectors, tools, and runtime-enforced policies. It does not yet define a dedicated personality or
-working-style schema. It also does not own an experiment lifecycle that versions a build phase and
-its artifacts, evaluates it, then promotes, branches, or discards it without disturbing a known-good
-release.
+Beyond the current governance and execution contracts, Gabby may make an agent's behavior and
+construction lifecycle more explicit and revisable. The current alpha supplies behavioral controls
+through instructions, skills, planners, selectors, tools, and runtime-enforced policies. It does not
+yet define a dedicated personality or working-style schema. It also does not own an experiment
+lifecycle that versions a build phase and its artifacts, evaluates it, then promotes, branches, or
+discards it without disturbing a known-good release. These are future agent-engineering capabilities,
+not prerequisites for understanding Gabby's current purpose.
 
 Future local feature work should treat these as separate contracts: behavioral profiles that compile
 to explicit instructions and preferences, and versioned development phases that snapshot config,
