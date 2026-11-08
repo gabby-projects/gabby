@@ -41,9 +41,9 @@ gabby = "gabby.cli:main"
 [project.optional-dependencies]
 server = ["uvicorn>=0.34,<1"]
 auth = ["PyJWT[crypto]>=2.13,<3"]
-pdf = ["pypdf>=6.19,<7"]
-ocr = ["Pillow>=11,<14", "pytesseract>=0.3.13,<1"]
-pdf-ocr = ["pypdf[image]>=6.19,<7", "pypdfium2>=5.13,<6", "pytesseract>=0.3.13,<1"]
+pdf = ["pypdf>=6.21.4,<7"]
+ocr = ["Pillow>=13,<14", "pytesseract>=0.3.13,<1"]
+pdf-ocr = ["pypdf[image]>=6.21.4,<7", "pypdfium2>=5.13,<6", "pytesseract>=0.3.13,<1"]
 parquet = ["pyarrow>=23,<27"]
 transformers = ["transformers>=5.18,<6"]
 transformers-adapters = ["peft>=0.19.1,<1"]
@@ -63,7 +63,7 @@ dev = [
   "mypy>=1.13,<3",
   "build>=1.2,<2",
   "pip-audit>=2.10,<3",
-  "pypdf>=6.19,<7",
+  "pypdf>=6.21.4,<7",
   "uv==0.13.5",
 ]
 
