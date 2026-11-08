@@ -4,6 +4,9 @@ This is the entry point for Gabby's user, architecture, operator, and contributo
 Gabby is an Agent Runtime and Governance Framework: it lets developers define agent
 capabilities, govern tool use, and execute requests within explicit runtime contracts. Execution is
 stateless between requests; the consuming application owns conversation history and durable memory.
+It is designed to complement orchestration frameworks such as LangChain, CrewAI, and IBM BeeAI:
+those frameworks can coordinate agents and workflows, while Gabby supplies governed execution for
+configured agent requests. Gabby is not intended to replace the host application's orchestration layer.
 
 Gabby follows the Orbit Projects documentation conventions: the README introduces the project,
 architecture documents explain ownership and contracts, focused guides explain a capability, and

@@ -10,6 +10,13 @@ what policies constrain their use, where approval or verification is required, a
 bounded and observed. Its responsibility is to execute a configured agent request within those
 contracts and return a result.
 
+Gabby is complementary to agent orchestration frameworks such as LangChain, CrewAI, and IBM BeeAI.
+An application may use one of those frameworks to coordinate agents or workflows and use Gabby to
+execute an agent request under explicit tool permissions, runtime policies, approvals, verification,
+and resource bounds. Gabby does not provide a competing general-purpose workflow orchestration layer
+and is not intended to replace the host application's coordinator. Its boundary is the governed
+execution of a configured agent request.
+
 The runtime is stateless between requests. It does not own the consumer's conversation lifecycle,
 project history, or durable user memory. A caller sends one request with whatever context it wants the
 agent to see. Gabby returns a result and optional trace; request-local state is discarded when
