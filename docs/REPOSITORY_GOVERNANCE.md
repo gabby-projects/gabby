@@ -10,8 +10,7 @@ reporting, reviewed pull requests, issue and pull-request templates, `CODEOWNERS
 GitHub Actions, CodeQL, OpenSSF Scorecard, a supported-Python CI matrix, lockfile-based development,
 and OIDC-backed PyPI Trusted Publishing. Project-specific workflows can add checks required by
 Gabby's agent, sandbox, and provider boundaries; they should preserve least-privilege permissions,
-review, supply-chain, and release controls. Orbit is a separate ecosystem and does not govern this
-repository.
+review, supply-chain, and release controls.
 
 ## Recommended default-branch rules
 

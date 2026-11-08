@@ -2,9 +2,8 @@
 
 ## Current state
 
-Gabby is a pre-1.0, async-first Python framework in the `undreamt-oss` organization. Orbit is a
-separate ecosystem and has no organization or governance relationship with this project. Gabby's
-agent runtime, provider, and sandbox gates are project-specific. The development environment is
+Gabby is a pre-1.0, async-first Python framework in the `undreamt-oss` organization. Gabby's agent
+runtime, provider, and sandbox gates are project-specific. The development environment is
 Python 3.11–3.14, managed with `uv` and the committed `uv.lock`. Readiness evidence and known gaps live in the
 [project scorecard](docs/PROJECT_SCORECARD.md); this file tracks maintainer-owned setup outside the
 source tree.
