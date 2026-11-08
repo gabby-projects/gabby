@@ -1,9 +1,9 @@
 # Gabby governance
 
-Gabby is developed in the open as part of the Orbit parent organization. It follows the same
-baseline contribution, review, security, and release practices as Orbit Core while retaining
-project-specific architecture and release gates. Anyone may propose an issue, design, documentation
-change, or pull request. Contributions follow the [Code of Conduct](CODE_OF_CONDUCT.md) and
+Gabby is developed in the open in the `undreamt-oss` GitHub organization. Orbit is a separate
+ecosystem and is not Gabby's parent organization. Gabby maintains its own project-specific
+architecture and release practices. Anyone may propose an issue, design, documentation change, or
+pull request. Contributions follow the [Code of Conduct](CODE_OF_CONDUCT.md) and
 [contribution guide](CONTRIBUTING.md); vulnerabilities follow [SECURITY.md](SECURITY.md) and must
 not be disclosed in public issues.
 

@@ -144,8 +144,8 @@ it to network traffic.
 - Added bounded RFC 5322 `.eml` ingestion with selected headers, MIME text extraction, attachment exclusion, and HTML fallback.
 - Added a bounded Jina hosted reranker adapter with host-owned credentials and validated response mapping.
 - Added a bounded Voyage hosted reranker adapter with host-owned credentials, validated response mapping, truncation disabled by default, and opt-in live acceptance.
-- Align package source, issue, documentation, and security metadata with the Orbit Projects
-  organization; document Gabby's shared parent-organization OSS maintenance baseline.
+- Align package source, issue, documentation, and security metadata with the `undreamt-oss`
+  organization; clarify that Orbit is a separate ecosystem.
 - Added a stateless HTTPX SSE consumer example with caller-owned context and memory, typed event
   parsing, and HTTPS enforcement for remote service URLs.
 - Added stateless `AgentTool` composition and the `create_app` service factory to the proposed

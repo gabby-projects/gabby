@@ -2,10 +2,10 @@
 
 ## Current state
 
-Gabby is a pre-1.0, async-first Python framework in the Orbit Projects organization. Its OSS
-maintenance baseline is shared with Orbit Core; its agent runtime, provider, and sandbox gates are
-project-specific. The development environment is Python 3.11–3.14, managed with `uv` and the
-committed `uv.lock`. Readiness evidence and known gaps live in the
+Gabby is a pre-1.0, async-first Python framework in the `undreamt-oss` organization. Orbit is a
+separate ecosystem and has no organization or governance relationship with this project. Gabby's
+agent runtime, provider, and sandbox gates are project-specific. The development environment is
+Python 3.11–3.14, managed with `uv` and the committed `uv.lock`. Readiness evidence and known gaps live in the
 [project scorecard](docs/PROJECT_SCORECARD.md); this file tracks maintainer-owned setup outside the
 source tree.
 
@@ -13,7 +13,7 @@ source tree.
 
 These controls live in GitHub or PyPI settings and cannot be guaranteed by repository files alone:
 
-- Confirm `@orbit-projects/maintainers` has the required access and can satisfy `.github/CODEOWNERS`.
+- Confirm the team configured in `.github/CODEOWNERS` exists and has the required access.
 - Protect the default branch with pull-request review, code-owner review, and the exact stable CI
   status checks reported by GitHub. Keep force-push and deletion restrictions enabled.
 - Confirm CodeQL and OpenSSF Scorecard publish reliable pull-request and default-branch results;

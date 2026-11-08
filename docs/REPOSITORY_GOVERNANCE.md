@@ -4,13 +4,14 @@ Gabby uses reviewed pull requests, automated checks, and protected branches to m
 quality and security of its open-source releases. GitHub rulesets live in repository settings;
 this document records the intended policy so maintainers can review and reproduce it.
 
-Gabby follows the parent organization's shared OSS baseline used by Orbit Core: Apache-2.0
-licensing, public contribution and conduct policies, private vulnerability reporting, reviewed pull
-requests, issue and pull-request templates, `CODEOWNERS`, Dependabot, pinned GitHub Actions,
-CodeQL, OpenSSF Scorecard, a supported-Python CI matrix, lockfile-based development, and
-OIDC-backed PyPI Trusted Publishing. Project-specific workflows can add checks required by
-Gabby's agent, sandbox, and provider boundaries; they should preserve the common permissions,
-review, supply-chain, and release controls.
+Gabby is maintained in the `undreamt-oss` GitHub organization. Its repository-specific safeguards
+include Apache-2.0 licensing, public contribution and conduct policies, private vulnerability
+reporting, reviewed pull requests, issue and pull-request templates, `CODEOWNERS`, Dependabot, pinned
+GitHub Actions, CodeQL, OpenSSF Scorecard, a supported-Python CI matrix, lockfile-based development,
+and OIDC-backed PyPI Trusted Publishing. Project-specific workflows can add checks required by
+Gabby's agent, sandbox, and provider boundaries; they should preserve least-privilege permissions,
+review, supply-chain, and release controls. Orbit is a separate ecosystem and does not govern this
+repository.
 
 ## Recommended default-branch rules
 
@@ -24,15 +25,15 @@ incident or release record.
 | Require status checks | Enabled after CI reports stable check names | Each change must pass the Python/platform matrix and quality gates. |
 | Block force pushes and deletion | Enabled | Reviewed history and release references remain auditable. |
 | Require linear history | Enable if squash or rebase merging is the project norm | Keeps the public history straightforward to review. |
-| Require code-owner review | Require review from `@orbit-projects/maintainers`, as declared in `.github/CODEOWNERS` | Keeps review ownership consistent across projects in the parent organization. |
+| Require code-owner review | Require review from the Gabby maintainers named in `.github/CODEOWNERS` | Keeps review ownership with this repository's maintainers. |
 | Require signed commits | Adopt progressively | Signing adds provenance but needs a documented contributor setup. |
 | Require deployments or merge queue | Disabled until a real environment or queue is maintained | Do not require checks that have no reproducible service behind them. |
 
 After CI is installed, open a successful pull request and select the exact status-check names shown
 by GitHub. Do not guess check names. Require the Python 3.11, 3.12, 3.13, and 3.14 quality jobs;
 enable CodeQL and Scorecard as merge checks only after their pull-request results are reliable.
-Repository settings cannot be enforced by workflow files alone. Confirm the shared maintainers team
-exists and has write access to this repository before making code-owner approval a required rule.
+Repository settings cannot be enforced by workflow files alone. Confirm the configured code-owner
+team exists and has write access to this repository before making code-owner approval a required rule.
 Track this and other repository-owned controls in the [maintainer handoff](../HANDOFF.md).
 
 ## Workflow and supply-chain policy

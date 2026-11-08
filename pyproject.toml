@@ -30,10 +30,10 @@ classifiers = [
 ]
 
 [project.urls]
-Source = "https://github.com/orbit-projects/gabby"
-Issues = "https://github.com/orbit-projects/gabby/issues"
-Documentation = "https://github.com/orbit-projects/gabby/tree/main/docs"
-Security = "https://github.com/orbit-projects/gabby/security/policy"
+Source = "https://github.com/undreamt-oss/gabby"
+Issues = "https://github.com/undreamt-oss/gabby/issues"
+Documentation = "https://github.com/undreamt-oss/gabby/tree/main/docs"
+Security = "https://github.com/undreamt-oss/gabby/security/policy"
 
 [project.scripts]
 gabby = "gabby.cli:main"
