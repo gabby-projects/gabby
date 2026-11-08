@@ -13,11 +13,14 @@ is intended for local small or moderate indexes, not shared network deployments.
 ## Decision
 
 Provide `PostgresVectorStore` over the host-owned asyncpg-compatible pool and PostgreSQL's pgvector
-extension. The host installs pgvector 0.8.0 or newer and applies `sql/postgres_vector.sql` through
-its migration system. Gabby uses pgvector's HNSW cosine index and requires a configured embedding dimension from
-1 through 2,000. The first store operation persists that dimension in the schema; subsequent
-workers with a different dimension fail closed. Embedding values are passed as text and cast by
-PostgreSQL, so core does not depend on a Python pgvector client package.
+extension. The host installs pgvector 0.8.0 or newer, replaces
+`__GABBY_VECTOR_DIMENSIONS__` in `sql/postgres_vector.sql` with the model dimension, and applies
+the migration through its migration system. Gabby uses pgvector's HNSW cosine index and requires a
+configured embedding dimension from 1 through 2,000. The first store operation persists that
+dimension in the schema; the migration seeds it so a misconfigured first worker cannot choose a
+different value, and subsequent workers with a different dimension fail closed. Embedding values
+are passed as text and cast by PostgreSQL, so core does not depend on a Python pgvector client
+package.
 
 The adapter implements generation staging, active-generation filtering, durable source fencing,
 and advisory transaction locks. Searches scope strict-order iterative scans, `ef_search`, and

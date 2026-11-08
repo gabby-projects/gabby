@@ -274,8 +274,10 @@ def test_pack_and_install_reject_paths_that_collide_on_other_filesystems(
     source = _skill_directory(tmp_path, name="review")
     (source / "Readme.md").write_text("first", encoding="utf-8")
     (source / "README.md").write_text("second", encoding="utf-8")
-    with pytest.raises(SkillPackageError, match="case-insensitive or Unicode-normalizing"):
-        pack_skill(source, tmp_path / "case-collision.gabskill")
+    source_names = {path.name for path in source.iterdir()}
+    if {"Readme.md", "README.md"} <= source_names:
+        with pytest.raises(SkillPackageError, match="case-insensitive or Unicode-normalizing"):
+            pack_skill(source, tmp_path / "case-collision.gabskill")
 
     contents = {
         "skill.yaml": (source / "skill.yaml").read_bytes(),

@@ -22,7 +22,7 @@ enforced at runtime and must not depend on prompt instructions.
 Gabby supports Python 3.11 through 3.14. Use the committed lockfile for development:
 
 ```bash
-python -m pip install uv==0.12.23
+python -m pip install uv==0.13.5
 uv sync --frozen --group dev --extra server --extra auth --extra transformers \
   --extra observability --extra skill-signing --extra windows-sandbox
 uv lock --check

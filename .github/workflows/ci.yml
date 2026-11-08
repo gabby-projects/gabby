@@ -28,12 +28,15 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install uv==0.12.23
+      - run: python -m pip install uv==0.13.5
       - if: runner.os != 'Windows'
         run: uv sync --frozen --group dev --extra server --extra auth --extra observability --extra skill-signing --extra pdf-ocr --extra parquet --extra mcp --python '${{ matrix.python-version }}'
       - if: runner.os == 'Windows'
         run: uv sync --frozen --group dev --extra server --extra auth --extra observability --extra skill-signing --extra pdf-ocr --extra parquet --extra windows-sandbox --extra mcp --python '${{ matrix.python-version }}'
-      - run: uv run --no-sync pytest --cov=gabby --cov-report=term-missing
+      - if: runner.os == 'Linux'
+        run: uv run --no-sync pytest --cov=gabby --cov-report=term-missing
+      - if: runner.os != 'Linux'
+        run: uv run --no-sync pytest
 
   sandbox-live:
     runs-on: ubuntu-24.04
@@ -45,7 +48,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
-      - run: python -m pip install uv==0.12.23
+      - run: python -m pip install uv==0.13.5
       - run: uv sync --frozen --group dev --extra server --extra auth --extra observability --extra skill-signing --python '3.14'
       - name: Start and verify Docker daemon
         run: |
@@ -80,17 +83,17 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install uv==0.12.23
+      - run: python -m pip install uv==0.13.5
       - run: uv sync --frozen --group dev --extra server --extra auth --extra transformers --extra observability --extra skill-signing --extra pdf-ocr --extra parquet --extra windows-sandbox --extra mcp --python '${{ matrix.python-version }}'
       - run: uv lock --check
       - run: uv run --no-sync ruff check src tests scripts examples
       - run: uv run --no-sync ruff format --check src tests scripts examples
-      - run: uv run --no-sync mypy src/gabby tests scripts examples
+      - run: uv run --no-sync mypy --python-version '${{ matrix.python-version }}' src/gabby tests scripts examples
       - run: uv run --no-sync python scripts/check_license_headers.py
       - run: uv run --no-sync python scripts/check_workflows.py
       - run: uv run --no-sync python scripts/check_scorecard.py
       - run: uv run --no-sync python scripts/check_documentation.py
-      - run: uv run --no-sync pytest --cov=gabby --cov-report=term-missing --cov-report=xml
+      - run: uv run --no-sync pytest
       - run: uv build --out-dir dist
       - run: uv run --no-sync python scripts/check_package.py dist
       - run: python -m pip install --no-deps --target "$RUNNER_TEMP/gabby-wheel" dist/*.whl

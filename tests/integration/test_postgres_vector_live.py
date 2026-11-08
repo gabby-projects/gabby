@@ -45,8 +45,10 @@ async def postgres_vectors() -> AsyncIterator[PostgresVectorStore]:
             max_size=8,
             server_settings={"search_path": f"{schema},public"},
         )
-        migration = (Path(__file__).resolve().parents[2] / "sql" / "postgres_vector.sql").read_text(
-            encoding="utf-8"
+        migration = (
+            (Path(__file__).resolve().parents[2] / "sql" / "postgres_vector.sql")
+            .read_text(encoding="utf-8")
+            .replace("__GABBY_VECTOR_DIMENSIONS__", "3")
         )
         async with pool.acquire() as connection:
             await connection.execute(migration)
