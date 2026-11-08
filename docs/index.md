@@ -8,10 +8,9 @@ It is designed to complement orchestration frameworks such as LangChain, CrewAI,
 those frameworks can coordinate agents and workflows, while Gabby supplies governed execution for
 configured agent requests. Gabby is not intended to replace the host application's orchestration layer.
 
-Gabby is maintained in the `undreamt-oss` GitHub organization. Orbit is a separate ecosystem and is
-not Gabby's parent organization. The README introduces the project, architecture documents explain
-ownership and contracts, focused guides explain capabilities, and the roadmap and scorecard separate
-implementation from release evidence.
+Gabby is maintained in the `undreamt-oss` GitHub organization. The README introduces the project,
+architecture documents explain ownership and contracts, focused guides explain capabilities, and the
+roadmap and scorecard separate implementation from release evidence.
 
 ## Start here
 
