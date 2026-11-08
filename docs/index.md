@@ -1,8 +1,9 @@
 # Gabby Documentation
 
 This is the entry point for Gabby's user, architecture, operator, and contributor documentation.
-Gabby is an async-first Python stateless agent execution runtime. It executes each request with
-temporary run state; the consuming application owns conversation history and durable memory.
+Gabby is an Agent Runtime and Governance Framework: it lets developers define agent
+capabilities, govern tool use, and execute requests within explicit runtime contracts. Execution is
+stateless between requests; the consuming application owns conversation history and durable memory.
 
 Gabby follows the Orbit Projects documentation conventions: the README introduces the project,
 architecture documents explain ownership and contracts, focused guides explain a capability, and
@@ -11,8 +12,8 @@ Core's OSS maintenance baseline while keeping its agent-runtime contracts projec
 
 ## Start here
 
-- [Project overview and quick start](../README.md) — understand the runtime boundary and run the
-  offline starter flow.
+- [Project overview and quick start](../README.md) — understand Gabby's governance and execution
+  boundary and run the offline starter flow.
 - [Complete user guide](README_GUIDE.md) — install Gabby, configure providers, define agents, use
   skills, tools, and knowledge, and run the Python, HTTP, and MCP interfaces.
 - [Examples](../examples/README.md) — runnable offline examples and a hosted-service example.

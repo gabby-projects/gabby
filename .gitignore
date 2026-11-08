@@ -11,3 +11,4 @@ build/
 coverage.xml
 htmlcov/
 .tox/
+AGENTS.md
