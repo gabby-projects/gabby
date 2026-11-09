@@ -1,0 +1,17 @@
+name: Roadmap proposal
+description: Propose a broader project direction or milestone.
+labels: [roadmap]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should users or contributors be able to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why is this important?
+    validations:
+      required: true

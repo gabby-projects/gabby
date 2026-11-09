@@ -1,0 +1,36 @@
+# Apply labels to pull requests based on changed files or branch names.
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "**/*.rst"
+          - "docs/**"
+  - head-branch:
+      - "^docs(?:/|-|$)"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pyproject.toml"
+          - "uv.lock"
+          - "requirements*.txt"
+
+github_actions:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/dependabot.yml"
+  - head-branch:
+      - "^ci(?:/|-|$)"
+
+bug:
+  - head-branch:
+      - "^fix(?:/|-|$)"
+
+enhancement:
+  - head-branch:
+      - "^feat(?:/|-|$)"
+
+roadmap:
+  - head-branch:
+      - "^roadmap(?:/|-|$)"
