@@ -1,5 +1,7 @@
 <div align="center">
 
+<img width="512" height="512" alt="gabby-logo" src="https://github.com/user-attachments/assets/e586a825-3c98-4a33-adec-08aed1263315" />
+
 # Gabby
 
 ### An Agent Runtime and Governance Framework
