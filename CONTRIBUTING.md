@@ -76,6 +76,9 @@ ci: validate supported Python versions
 chore: refresh maintainer references
 ```
 
+Use a matching lowercase prefix for branch names: `ci/`, `docs/`, `feat/`, `fix/`, `roadmap/`, or `chore/`.
+The pull request labeler uses these prefixes to apply labels; the corresponding label must exist in the repository.
+
 Public classes and functions exported from `gabby` need precise annotations and concise docstrings.
 Module docstrings state the module boundary. The documentation checker also verifies Markdown
 headings, code fences, local links, and stale-work markers in comments. Comments explain ownership,
