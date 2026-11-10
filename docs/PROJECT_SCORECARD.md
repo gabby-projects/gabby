@@ -34,12 +34,10 @@ a whole-category percentage change.
 
 ## Verification snapshot
 
-The optional local LoRA SFT feature passed 101 focused CLI, training-contract, and Transformers
-provider tests. `gabby train --check-dataset` validated the included three-example JSONL sample.
-The opt-in offline tiny-model acceptance trained an adapter, loaded it through the local
-Transformers provider, and completed an `Agent.arun()` call on CPU using PyTorch 2.14.1+cpu,
-Transformers 5.18.0, PEFT 0.21.2, and Accelerate 1.15.0. It downloads no model weights and does not
-measure adaptation quality.
+Historical acceptance evidence for the removed local training command is not evidence of a current
+Gabby capability. Gabby now specializes agent behavior through runtime configuration and does not
+train model weights; the local Transformers provider can still load externally produced adapters for
+inference.
 
 The latest Linux/Python 3.12.14 coverage-enabled run completed **1,765 passed, 37 skipped** in
 70.87 seconds. All executed tests passed, but branch-aware coverage measured **88.43%**, below the

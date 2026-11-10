@@ -378,21 +378,3 @@ remote code and requires safetensors loading.
 Set both opt-in flags, both model IDs, and `HF_TOKEN`, then run the test file without `-k`. Only the
 enabled providers make requests. The assertions check non-empty completion output, streamed text
 deltas, and one completion event. They do not evaluate answer quality or prove tool-calling behavior.
-
-## Local LoRA training
-
-This opt-in check creates a tiny random GPT-2 model and tokenizer locally, trains one LoRA step from
-a one-row assistant-masked JSONL dataset, writes a safetensors adapter, then loads that adapter with
-`TransformersProvider`. It downloads no model weights and measures no adaptation quality. Install a
-host-compatible PyTorch build first, followed by Gabby's `transformers` and `training` extras, then
-run:
-
-```sh
-GABBY_RUN_TRAINING_INTEGRATION=1 \
-uv run --no-sync pytest tests/integration/test_local_lora_training_live.py -q
-```
-
-The test normally skips so the standard suite does not import the optional ML stack. The CPU
-round-trip passed locally on 2026-10-03 with PyTorch 2.14.1+cpu, Transformers 5.18.0, PEFT 0.21.2,
-and Accelerate 1.15.0. It verifies the installed stack for one train, load, and `Agent.arun()` cycle;
-it does not measure adaptation quality. The deterministic contract tests remain routine CI coverage.

@@ -1581,8 +1581,6 @@ class TransformersProvider:
     model_id: str
     token_env: str = "HF_TOKEN"
     revision: str | None = None
-    adapter_id: str | None = None
-    adapter_revision: str | None = None
     cache_dir: str | None = None
     local_files_only: bool = False
     device: str = "cpu"
@@ -1604,16 +1602,6 @@ class TransformersProvider:
             not isinstance(self.revision, str) or not self.revision.strip()
         ):
             raise ValueError("revision must be a non-empty string or None")
-        if self.adapter_id is not None and (
-            not isinstance(self.adapter_id, str) or not self.adapter_id.strip()
-        ):
-            raise ValueError("adapter_id must be a non-empty PEFT adapter ID or path")
-        if self.adapter_revision is not None and (
-            not isinstance(self.adapter_revision, str) or not self.adapter_revision.strip()
-        ):
-            raise ValueError("adapter_revision must be a non-empty string or None")
-        if self.adapter_revision is not None and self.adapter_id is None:
-            raise ValueError("adapter_revision requires adapter_id")
         if not isinstance(self.local_files_only, bool):
             raise ValueError("local_files_only must be a boolean")
         if not isinstance(self.device, str) or not self.device.strip():
@@ -1661,8 +1649,6 @@ class TransformersProvider:
             raise ConfigError("model.model must be a non-empty Hugging Face model ID or path")
         token_env = config.get("api_key_env", "HF_TOKEN")
         revision = config.get("revision")
-        adapter_id = config.get("adapter_id")
-        adapter_revision = config.get("adapter_revision")
         cache_dir = config.get("cache_dir")
         device = config.get("device", "cpu")
         local_files_only = config.get("local_files_only", False)
@@ -1673,10 +1659,6 @@ class TransformersProvider:
             raise ConfigError("model.api_key_env must be a non-empty environment variable name")
         if revision is not None and not isinstance(revision, str):
             raise ConfigError("model.revision must be a string")
-        if adapter_id is not None and not isinstance(adapter_id, str):
-            raise ConfigError("model.adapter_id must be a string")
-        if adapter_revision is not None and not isinstance(adapter_revision, str):
-            raise ConfigError("model.adapter_revision must be a string")
         if cache_dir is not None and not isinstance(cache_dir, str):
             raise ConfigError("model.cache_dir must be a string")
         if not isinstance(device, str):
@@ -1688,8 +1670,6 @@ class TransformersProvider:
                 model_id=model_id,
                 token_env=token_env,
                 revision=revision,
-                adapter_id=adapter_id,
-                adapter_revision=adapter_revision,
                 cache_dir=cache_dir,
                 local_files_only=local_files_only,
                 device=device,
@@ -2004,29 +1984,6 @@ class TransformersProvider:
                     **load_options,
                 ),
             )
-            if self.adapter_id is not None:
-                try:
-                    from peft import PeftModel
-                except ImportError:
-                    raise ModelError(
-                        "Install Gabby's optional 'transformers-adapters' dependencies "
-                        "to load a PEFT adapter"
-                    ) from None
-                adapter_options: dict[str, Any] = {
-                    "is_trainable": False,
-                    "local_files_only": self.local_files_only,
-                    "use_safetensors": True,
-                }
-                if token:
-                    adapter_options["token"] = token
-                if self.adapter_revision:
-                    adapter_options["revision"] = self.adapter_revision
-                if self.cache_dir:
-                    adapter_options["cache_dir"] = self.cache_dir
-                model = cast(
-                    Any,
-                    PeftModel.from_pretrained(model, self.adapter_id, **adapter_options),
-                )
             model.to(self.device)
             model.eval()
         except ModelError:

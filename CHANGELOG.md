@@ -5,6 +5,9 @@ User-visible changes are recorded here. Before the first release, entries are gr
 
 ## Unreleased
 
+- Removed the local `gabby train` model-weight training workflow. Agent behavior is configured with
+  instructions, skills, policies, tools, knowledge, and runtime pipelines. Model adapter loading was
+  also removed from the local Transformers provider.
 - Added bounded token streaming for tool-free local Transformers generations; tool-enabled
   generations retain buffered, model-specific tool-call parsing. Synchronous tool-pool saturation
   now reports the stable `capacity_exhausted` error code.
@@ -23,11 +26,6 @@ certification. Review the [threat model](docs/THREAT_MODEL.md), [operations guid
 and [project scorecard](docs/PROJECT_SCORECARD.md) before using it with sensitive data or exposing
 it to network traffic.
 
-- Added optional local `gabby train` supervised fine-tuning for PEFT LoRA adapters, with bounded
-  assistant-only JSONL data, chat-template mask validation, safetensors output, and a data-digest
-  training manifest; `--check-dataset` validates data structure without loading ML dependencies.
-- Added optional inference-only PEFT adapter loading to the local Transformers provider, with
-  separately configurable base and adapter revisions and safetensors-only adapter weights.
 - Added bounded OPML 1.0/1.1/2.0 ingestion with one cited page per outline, searchable category
   paths, safe subscription URLs, `.opml` support, and `.xml` root detection without fetching links.
 - Added bounded JSON Feed 1.0/1.1 ingestion with one cited page per item, safe link metadata, and
