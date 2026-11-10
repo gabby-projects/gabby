@@ -19,7 +19,6 @@ import argparse
 import asyncio
 import base64
 import binascii
-import importlib.util
 import json
 import math
 import os
@@ -69,7 +68,6 @@ from .skill_packages import (
 from .skill_registry import SkillRegistryClient, build_static_skill_registry
 from .skill_signing import sign_skill_package, verify_skill_package_signature
 from .skill_trust import load_skill_trust_keys
-from .transformers_embeddings import TransformersEmbeddingProvider
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -96,7 +94,6 @@ def _parser() -> argparse.ArgumentParser:
             "huggingface",
             "anthropic",
             "gemini",
-            "transformers",
         ),
         default="openai_compatible",
         help="Built-in model provider name (default: openai_compatible)",
@@ -379,22 +376,6 @@ def _parser() -> argparse.ArgumentParser:
         default=[],
         help="Require this capability on the stream route; repeat to require multiple scopes",
     )
-    mcp_command = commands.add_parser(
-        "mcp", help="Expose one stateless agent as a local MCP stdio server"
-    )
-    mcp_command.add_argument("agent", type=Path)
-    mcp_command.add_argument(
-        "--knowledge-db",
-        type=Path,
-        default=Path("./.gabby/knowledge.db"),
-        help="SQLite knowledge database (default: ./.gabby/knowledge.db)",
-    )
-    mcp_command.add_argument(
-        "--max-response-bytes",
-        type=int,
-        default=DEFAULT_MAX_HTTP_RESPONSE_BYTES,
-        help="Maximum serialized tool result bytes (default: 4194304)",
-    )
     return parser
 
 
@@ -608,21 +589,6 @@ def main(argv: list[str] | None = None) -> int:
         definition = load_agent(args.agent)
         if args.command == "evaluate":
             return asyncio.run(_run_evaluation_command(definition, args))
-        if args.command == "mcp":
-            if args.max_response_bytes < 256:
-                raise ConfigError("--max-response-bytes must be at least 256")
-            from .mcp_adapter import create_mcp_server
-
-            agent: Agent | None = None
-            try:
-                agent = _cli_agent(definition, args.knowledge_db, require_database=True)
-                mcp_server = create_mcp_server(agent, max_response_bytes=args.max_response_bytes)
-            except ImportError as exc:
-                if agent is not None:
-                    agent.close()
-                raise ConfigError(str(exc)) from None
-            mcp_server.run(transport="stdio")
-            return 0
         if args.command == "validate":
             # Constructing resolves skills and provider configuration without a model call.
             with _cli_agent(definition, args.knowledge_db, require_database=False):
@@ -809,7 +775,6 @@ def _create_agent_template(args: argparse.Namespace) -> None:
         "huggingface": "HF_TOKEN",
         "anthropic": "ANTHROPIC_API_KEY",
         "gemini": "GEMINI_API_KEY",
-        "transformers": "HF_TOKEN",
     }[provider]
     definition["model"] = {
         "provider": provider,
@@ -1113,7 +1078,7 @@ def _load_embedding_provider_config(
     allowed_options = _EMBEDDING_PROVIDER_OPTIONS.get(kind)
     if allowed_options is None:
         raise ConfigError(
-            "provider.type must be openai_compatible, gemini, huggingface, or transformers"
+            "provider.type must be openai_compatible, gemini, or huggingface"
         )
     unknown_options = set(provider_config) - (allowed_options | {"type"})
     if unknown_options:
@@ -1184,24 +1149,6 @@ _EMBEDDING_PROVIDER_OPTIONS: dict[str, frozenset[str]] = {
             "timeout_seconds",
         }
     ),
-    "transformers": frozenset(
-        {
-            "model_id",
-            "token_env",
-            "revision",
-            "cache_dir",
-            "local_files_only",
-            "device",
-            "pooling",
-            "normalize",
-            "max_input_tokens",
-            "batch_size",
-            "max_texts",
-            "max_input_bytes",
-            "max_output_bytes",
-            "timeout_seconds",
-        }
-    ),
 }
 
 
@@ -1216,17 +1163,6 @@ def _create_embedding_provider(config: dict[str, Any]) -> Any:
         return HuggingFaceFeatureExtractionProvider.from_config(config)
     if kind == "gemini":
         return GeminiEmbeddingProvider.from_config(config)
-    if kind == "transformers":
-        if (
-            importlib.util.find_spec("transformers") is None
-            or importlib.util.find_spec("torch") is None
-        ):
-            raise ConfigError(
-                "Local Transformers embeddings require the transformers extra and a PyTorch build"
-            )
-        settings = dict(config)
-        settings.pop("type", None)
-        return TransformersEmbeddingProvider(**settings)
     raise ConfigError("Unsupported embedding provider type")
 
 

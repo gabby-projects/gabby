@@ -21,7 +21,8 @@ remain separately composable.
 - Reuse the existing async OpenAI-compatible adapter for completion, tool calls, streaming,
   cancellation, timeouts, and client cleanup. Do not add the `huggingface_hub` or OpenAI SDK as a
   Gabby dependency for this integration.
-- Keep local Hugging Face Transformers inference behind the `ModelProvider` interface for now.
+- Local model loading was later removed from the built-in runtime; hosts can still inject a custom
+  `ModelProvider`.
 - Do not describe inference routing, prompting, retrieval, or skill composition as model training.
 
 ## Consequences

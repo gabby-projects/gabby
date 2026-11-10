@@ -1,6 +1,6 @@
 # ADR 0071: Optional local Hugging Face Transformers chat provider
 
-- Status: Accepted
+- Status: Superseded; local Transformers loading removed
 - Date: 2026-10-02
 
 ## Context

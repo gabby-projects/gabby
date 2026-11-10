@@ -184,128 +184,12 @@ temperature=..., max_bytes=...)` themselves using the agent's policy limit; the 
 inspect an extension's private outbound request construction.
 
 `FileParser` is a synchronous protocol with lowercase dotted `extensions` and a `parse(bytes)` method
-returning ordered `ParsedPage` values. `ParsedPage.metadata` is a mapping of JSON-compatible
-page-level fields copied onto each chunk from that page. `FileIngestor` owns root-confined path checks,
-per-file source replacement, deterministic chunking, and file, directory, page, and extracted-text
-limits. The core UTF-8 parser handles Markdown, plain text, and `.log` files as text without
-interpreting a log-specific format; `YAMLTextParser` handles bounded
-standalone `.yaml` and `.yml` data files, rejecting duplicate keys, alias cycles, multiple documents,
-merge keys, unsafe tags, non-JSON values, and excessive depth or node count. It renders nested values as stable
-dotted key paths and list indexes to make structured values searchable, with configurable input and
-output byte caps. An optional leading YAML front matter block is removed from indexed body text and
-exposed as page metadata. The block is capped at 16 KiB,
-uses safe YAML loading, rejects duplicate keys and cyclic or non-JSON values, and is limited to 10,000
-nodes and 32 levels. YAML dates and times become ISO-8601 strings. Caller-supplied file metadata
-overrides front matter; Gabby assigns reserved chunk and page fields afterward. `TOMLTextParser`
-uses the standard-library TOML parser, rejects malformed, excessively nested, or oversized inputs,
-normalizes date/time values to ISO-8601 strings, and renders stable dotted paths and list indexes
-within an output byte cap. Duplicate TOML keys are rejected by the strict parser. `EmailTextParser`
-handles bounded RFC 5322/MIME
-messages, indexes selected headers and text bodies, skips attachments, and prefers plain-text
-alternatives over duplicate HTML. HTML-only mail uses the bounded visible-text HTML parser.
-It indexes From, To, Cc, Date, Subject, and Message-ID; default limits are 10 MiB input, 1,000
-MIME parts, 32 nesting levels, and 10 million extracted characters. Set limits on `EmailTextParser`
-and pass it through `FileIngestor(parsers=...)` when you need different parser-specific values.
-`ICalendarTextParser` turns each direct-child `VEVENT`, `VTODO`, and `VJOURNAL` into a source-ordered cited page,
-unfolds content lines, and decodes RFC 5545 text escapes. Event metadata retains the existing
-`calendar_event_index`, UID, start/end, location, organizer, and attendee fields. Task pages expose
-`calendar_task_index`, UID, start, due, completed, status, priority, and attendee fields when present.
-Task text includes summary, due/completed times, description, status, priority, and selected common
-fields. Journal pages expose `calendar_journal_index`, UID, start, and status fields when present;
-journal text includes summary, start, description, status, and selected common fields. Nested alarms
-and other subcomponents are excluded. It requires UTF-8 and valid component
-boundaries, and defaults to 10 MiB input, 1,000 events, 1,000 tasks, 1,000 journals, 1,000
-attendees per record, 100,000 lines, and 10 million extracted characters. Configure its limits directly and pass it through
-`FileIngestor(parsers=...)`
-for parser-specific bounds.
-`RSSAtomTextParser` turns RSS 1.0/2.0 and Atom entries into one-based cited pages and exposes feed
-title, entry ID, link, date, author, and categories as metadata. It accepts `.rss` and `.atom`; the
-default `XMLTextParser` detects RSS, RDF, and Atom roots in `.xml` files and delegates with the same
-input, output, XML structure, and feed-item bounds. Entry HTML is reduced to visible text. It does
-not fetch feeds or follow links; only absolute HTTP(S) citations without embedded credentials are
-retained. DTDs, entities, malformed XML, and oversized feeds are rejected.
-Configure `RSSAtomTextParser` or `XMLTextParser(max_feed_items=...)` directly and pass the parser
-through `FileIngestor(parsers=...)` when you need parser-specific limits.
-`OPMLTextParser` indexes OPML 1.0/1.1/2.0 outlines as individual cited pages, preserving the
-outline hierarchy as category metadata. It supports `.opml` directly, and the default XML parser
-also detects OPML roots in `.xml` files. Feed, website, and outline URLs are retained only as safe
-absolute HTTP(S) citations; the parser never follows them. Input, output, outline count, XML element
-count, depth, and attributes are bounded, and DTD/entity declarations are rejected. Configure
-`OPMLTextParser` directly or pass it through `FileIngestor(parsers=...)` for parser-specific limits.
-`JSONTextParser` validates bounded strict JSON, rejecting duplicate keys, non-standard constants,
-and excessive nesting or token counts. It preserves ordinary JSON source text; when the top-level
-`version` identifies JSON Feed 1.0 or 1.1, it instead returns one cited page per item, with feed
-title, ID, link, publication date, author, and tags in searchable text or filter metadata. It accepts
-plain text and HTML item content, strips HTML to visible text, and applies feed item and aggregate
-output limits. Only absolute HTTP(S) item links without embedded credentials become citations; feeds
-and links are never fetched. Configure `JSONTextParser` directly or pass it through
-`FileIngestor(parsers=...)` for parser-specific limits.
-`HTMLTextParser` handles UTF-8 HTML and omits script,
-style, template, SVG, and hidden subtrees while retaining titles, headings, and paragraph
-boundaries. `JSONLinesTextParser` applies strict JSON duplicate-key, nesting, and token checks to each
-non-blank line, labels records with their physical line numbers, and caps record count, record bytes,
-and rendered output size. `XMLTextParser` streams UTF-8 XML into path-labeled text and attributes, rejects DTD/entity declarations, and limits input, output, depth, elements, and attributes without an additional package. `RTFTextParser` uses a bounded standard-library parser to extract visible text and Unicode escapes, skips non-body destinations and binary payloads, and limits input, nesting, control words, and output. It does not render layout, images, or embedded objects. `DOCXTextParser` and `PPTXTextParser` use only the standard library to read bounded OpenXML archives
-without extracting entries to disk. DOCX preserves paragraph and table order, tabs, and line breaks;
-it does not extract images, deleted revision text, page layout, or page attribution. PPTX preserves
-slide order and returns one-based slide numbers as `page_number` citations; it does not extract notes,
-images, or chart data. Both reject encrypted archives, unsafe or duplicate member paths, unsupported
-XML encodings, DTD/entity declarations, malformed packages, and oversized inputs. DOCX defaults cap
-the archive at 10 MiB, uncompressed entries at 32 MiB, package metadata XML at 1 MiB per part, the
-main XML part at 16 MiB, XML elements at 250,000, paragraphs at 100,000, and extracted text at 10
-million characters. PPTX defaults cap the archive at 10 MiB, uncompressed entries at 32 MiB, each
-slide XML part at 4 MiB, slides at 100, and extracted text at 10 million characters.
-`EPUBTextParser` reads XHTML/HTML chapters in OPF spine order and returns one-based chapter-order
-`page_number` citations. It rejects unsafe archive paths, remote chapter references, encrypted
-archives, duplicate members, DTD/entity declarations, malformed packages, and oversized content;
-defaults cap the archive at 10 MiB, expanded members at 32 MiB, package XML at 1 MiB per part,
-chapters at 4 MiB, chapter count at 1,000, and extracted text at 10 million characters. It does not
-extract images, stylesheets, or other embedded resources. `ODTTextParser` reads document-ordered
-headings, paragraphs, tables, tabs, line breaks, and repeated spaces from bounded OpenDocument Text
-archives. It rejects encrypted archives, unsafe or duplicate member paths, DTD/entity declarations,
-malformed packages, and oversized input; defaults cap the archive at 10 MiB, expanded content at
-32 MiB, content XML at 16 MiB, XML elements at 250,000, paragraphs at 100,000, and extracted text
-at 10 million characters. `ODSTextParser` emits sheet- and row-labeled column values for non-empty
-rows and handles bounded repeated rows and columns. It rejects encrypted archives, unsafe or duplicate
-paths, DTD/entity declarations, malformed packages, and oversized input; defaults cap the archive at
-10 MiB, expanded content at 32 MiB, content XML at 16 MiB, XML elements at 250,000, rows at
-100,000, columns at 1,000, cells at 1 million, sheets at 1,000, and extracted text at 10 million
-characters. It does not calculate formulas or extract embedded media. `XLSXTextParser` follows workbook sheet
-order and renders cached values, inline strings, and shared strings with sheet, row, and column
-labels. It rejects external or unsafe relationships, encrypted archives, duplicate paths, DTD/entity
-declarations, malformed packages, and oversized input; defaults cap the archive at 10 MiB, expanded
-content at 32 MiB, worksheet XML at 4 MiB per sheet, shared-string XML at 16 MiB, sheets at 1,000,
-rows at 100,000, columns at 1,000, cells and shared strings at 1 million, and extracted text at 10
-million characters. It does not recalculate formulas. Custom parsers execute as trusted in-process Python; use a
-separate process or service when parsing untrusted complex formats. PDF support uses the optional `pdf` extra
-(`pip install 'gabby-agent-runtime[pdf]'`) and records one-based `page_number` metadata for citations.
-The built-in pypdf parser applies a 4 MiB decoded-output limit to each supported PDF stream filter
-and a 32 MiB aggregate decoded page-content limit per PDF by default. Configure
-`max_content_stream_bytes` and `max_total_content_stream_bytes` on `PDFTextParser` or `FileIngestor`
-to change them. These limits bound decoded page-content streams, while parser memory and CPU can still depend on PDF
-structure and library internals.
-`ParquetTextParser` uses the optional `parquet` extra to stream flat scalar tables in bounded
-batches. It emits row-labeled pages with row-range metadata and caps input, rows, columns, row
-groups, metadata-reported uncompressed bytes, cell and rendered row size, page count, and total
-output. Nested and
-binary columns are rejected. See [ADR 0106](architecture/adr/0106-bounded-parquet-ingestion.md).
-`ImageOCRParser` adds bounded OCR for raster image formats through the optional `ocr` extra and a
-host-installed Tesseract executable. Its `OCRBackend` protocol lets hosts provide another engine.
-The default backend limits frame count, total decoded pixels, extracted characters, and per-frame
-execution time, and returns one-based page attribution for multi-frame images. Tesseract runs as a
-child process; install it from the operating system package manager and keep it patched. The optional
-`pdf-ocr` extra enables scanned and vector-only PDF OCR through
-`FileIngestor(pdf_ocr_backend=TesseractOCRBackend())`. Blank-text pages use their first embedded
-image when available; otherwise `PDFiumPageRenderer` rasterizes the page in memory. Both paths keep
-original PDF page numbers and share the configured page, pixel, text, and Tesseract timeout limits.
-Rendered images are also bounded by `max_ocr_image_bytes`, defaulting to 16 MiB. Hosts can
-inject a `PDFPageRenderer` implementation through `pdf_page_renderer`. The PDFium renderer is
-synchronous and cannot be interrupted by the OCR timeout; isolate parsing when processing hostile
-PDFs. Multiple embedded images are not composited into one page; inject a custom renderer for those
-layouts. Pass `TesseractOCRBackend(language="eng")` with a language model installed on the host; the
-default is English.
-`TextFileIngestor` remains an alias for `FileIngestor` for existing callers. See
-[ADR 0032](architecture/adr/0032-pluggable-page-aware-file-ingestion.md) and
-[ADR 0045](architecture/adr/0045-stdlib-html-text-ingestion.md).
+returning ordered `ParsedPage` values. `FileIngestor` provides built-in UTF-8 `.txt`, `.log`, `.md`,
+and `.markdown` parsing, root-confined paths, bounded reads and output, deterministic chunking, and
+per-source atomic replacement. It intentionally does not bundle specialized format parsers such as
+PDF/OCR, office documents, email, archives, or structured-data formats. Hosts may inject trusted
+parsers through `FileIngestor(parsers=...)`; complex or untrusted formats should be parsed in an
+isolated process or service. `TextChunker` is independently replaceable.
 
 Provider responses default to 4 MiB per call through `policies.max_model_response_bytes`. The
 runtime checks normalized responses and streamed deltas returned by custom providers. An extension
@@ -343,29 +227,6 @@ only to the model provider, and excluded from traces and tool arguments. See
 [ADR 0096](architecture/adr/0096-native-gemini-provider.md), the official
 [GenerateContent API](https://ai.google.dev/api/generate-content), and the
 [thought-signature guide](https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures).
-
-`TransformersProvider` is the optional in-process local chat adapter. Install the `transformers`
-extra and a PyTorch 2.5+ build appropriate for the host; Gabby does not choose a CUDA or accelerator
-wheel. Loading is lazy. Set `revision` to a fixed Hub commit for reproducible model selection and
-`local_files_only: true` for offline loading. Remote weights use the configured `api_key_env`
-(default `HF_TOKEN`); custom model code is disabled and only safetensors checkpoints are accepted.
-`max_input_tokens` defaults to 32,768 and `max_new_tokens` to 1,024; both can be configured within
-validated bounds. Local generation runs in Gabby's bounded daemon callback pool and is serialized
-per provider instance. Cancellation requests stop generation between tokens; model kernels that do
-not return to the stopping check cannot be forcibly interrupted. This adapter currently implements
-completion without incremental token streaming. Models must provide a compatible chat template;
-when the agent exposes tools, the template must include the tool schemas and the tokenizer must
-provide `parse_response` with a response template. A model-specific `model.tool_response_template`
-can supply that parser schema when the tokenizer has no default; it is snapshotted as bounded JSON
-and limited to 64 KiB. The provider removes one complete Markdown JSON fence before parsing when an
-explicit schema is configured, then validates the parsed call against the registered tool names and
-argument shapes. It never infers calls from arbitrary prose. A real CPU structured-call acceptance
-passed with Transformers 5.18.0 and a pinned Qwen2.5-Coder-0.5B-Instruct revision using a custom
-response template. This verifies parser/provider compatibility and one model's tool-call output;
-model selection quality, full multi-step behavior, other templates, devices, throughput, and
-accelerator combinations still need separate acceptance. See [ADR 0071](architecture/adr/0071-local-transformers-provider.md),
-the [Transformers chat-template guide](https://huggingface.co/docs/transformers/main/chat_templating),
-and the [PyTorch installation selector](https://pytorch.org/get-started/locally/).
 
 File-backed skills are portable directories rooted at `skill.yaml`. Long procedures can live in a
 UTF-8 `instructions.md` beside the manifest or in a path selected with `instructions_file`; authored
@@ -525,33 +386,6 @@ finally:
     await reranker.aclose()
 ```
 
-`TransformersReranker` is an optional local implementation for Hugging Face sequence-classification
-checkpoints. Install the `transformers` extra and a host-compatible PyTorch build. The model loads on
-first use; custom model code and pickle-based weights are disabled. Pin `revision` for repeatable
-model selection and set `local_files_only: true` for offline operation. Private checkpoints use
-`api_key_env` (default `HF_TOKEN`). Inputs are bounded to 4 MiB of UTF-8 text by default, tokenized
-to at most 512 tokens per query/document pair, and scored in batches of 8 through Gabby's bounded
-worker pool. The default relevance score is the sole logit for one-output regression models or the
-positive-class logit at index 1 for two-class models; other classifiers require an explicit
-`relevance_label_index`. Ranking ties preserve candidate order. These controls bound request shape
-and execution time but do not establish a model's relevance quality; evaluate a chosen checkpoint
-on representative queries before deployment. See the local-model acceptance harness in
-[`tests/integration/README.md`](../tests/integration/README.md).
-
-```python
-from gabby import RerankingRetriever, TransformersReranker
-
-reranker = TransformersReranker.from_config(
-    {
-        "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
-        "revision": "<reviewed-commit>",
-        "local_files_only": True,
-    }
-)
-retriever = RerankingRetriever(base_retriever, reranker, candidate_limit=20)
-documents = await retriever.retrieve("account recovery", limit=5)
-```
-
 `SQLiteVectorStore` is the built-in persistent implementation of `GenerationAwareVectorStore`. It
 uses normalized double-precision vectors and exact cosine search; it scans the index linearly while
 retaining only the requested top results in memory. This is a dependency-free local option for small
@@ -612,22 +446,11 @@ map, and make retired-generation deletion idempotent. Fence advancement is requi
 claims a fully staged generation: it prevents a delayed former owner from modifying that generation
 after activation. These rules protect concurrent processes and recovery after a crash; an adapter
 that ignores fences is not safe to use with the coordinator.
-`SQLiteGenerationManifestStore` is for processes sharing a local host filesystem. Multi-host
-deployments can use `PostgresGenerationManifestStore` with the optional `postgres` extra and a
-host-owned asyncpg-compatible pool. Apply `sql/postgres_generation_manifest.sql` through the host's
-migration system before use. The adapter uses PostgreSQL transactions and the server clock for
-leases and fencing. The host owns TLS, credentials, routing, pool lifecycle, migrations, backups,
-and consistency. Every Gabby instance must also use the same shared lexical and vector backends
-that implement the generation-aware fencing contract; a shared manifest does not make SQLite
-knowledge files safe to share across hosts. Other database systems can implement
-`GenerationManifestStore` with atomic lease claims and an authoritative clock.
-
-`PostgresKnowledgeStore` provides a host-pooled shared lexical store through the
-`GenerationAwareRetriever` and `KnowledgeStore` contracts. Apply `sql/postgres_knowledge.sql`
-externally and inject the store into `FileIngestor`, `Agent`, or `HybridIndexCoordinator`. It uses
-per-source advisory transaction locks and durable fencing rows for staged generations. Multi-host
-hybrid indexing still requires a shared generation-aware vector store and
-`PostgresGenerationManifestStore`; keep their records in the same PostgreSQL consistency domain.
+`SQLiteGenerationManifestStore` coordinates local generation activation for processes sharing a
+host filesystem. Hosts can implement `GenerationManifestStore` and the generation-aware lexical and
+vector contracts when they need a different storage or deployment model. The host implementation
+owns atomic lease claims, authoritative time, fencing, migrations, credentials, backups, and
+consistency across all participating stores.
 
 Custom `EngineAdapter` implementations used with native Windows images must implement
 `validate_windows_sandbox_support()` and fail unless they can enforce the required isolation. The

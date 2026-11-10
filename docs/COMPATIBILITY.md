@@ -15,34 +15,23 @@ The v1.0 release will support these contracts:
   `Agent.arun`, `Agent.astream`, `Agent.run`, `Agent.aclose`, and `Agent.close` retain the documented
   statelessness, cancellation, and ownership behavior.
 - **Python extension contracts:** `ModelProvider`, `StreamingModelProvider`, `Tool`, `ToolRegistry`,
-  `AsyncRedisCommands`, `RedisSkillRevocationStore`, `AsyncPostgresExecutor`, `PostgresApprovalAudit`,
-  `AsyncPostgresPool`, `PostgresGenerationManifestStore`, `PostgresKnowledgeStore`,
-  `PostgresStreamJournal`, `PostgresVectorStore`,
+  `AsyncRedisCommands`, `RedisSkillRevocationStore`,
   `ToolContext`, `ToolError`, `ToolErrorCode`, `CancellationToken`, `Environment`, `FileParser`,
-  `ParsedPage`, `MarkupTextParser`, `TOMLTextParser`, `YAMLTextParser`, `ParquetTextParser`, `VCardTextParser`, `Retriever`,
-  `KnowledgeStore`, `EmbeddingProvider`, `AsymmetricEmbeddingProvider`, `VectorStore`, `Reranker`, `ICalendarTextParser`,
-  `MboxTextParser`, `SkillSelector`, `Planner`,
+  `ParsedPage`, `MarkupTextParser`, `Utf8TextParser`, `ParagraphChunker`, `IngestionReport`, `Retriever`,
+  `KnowledgeStore`, `EmbeddingProvider`, `AsymmetricEmbeddingProvider`, `VectorStore`, `Reranker`, `SkillSelector`, `Planner`,
   `Verifier`, `Tracer`, `Authenticator`, `ApprovalHandler`, `ApprovalAuditSink`, and `EngineAdapter`, plus the
-  content-minimizing `SQLiteApprovalAudit`, shared-backend `PostgresApprovalAudit`,
+  content-minimizing `SQLiteApprovalAudit`,
   `AuditedApprovalHandler`, `ApprovalAuditRecord`, and
   sanitized `ApprovalAuditError`, plus their documented result types and lifecycle behavior in
   [the extension contracts reference](EXTENSION_CONTRACTS.md).
 - **Built-in rerankers:** `CohereReranker`, `JinaReranker`, `NvidiaReranker`,
-  `VoyageReranker`, and the optional local `TransformersReranker` use the documented `Reranker`
+  and `VoyageReranker` use the documented `Reranker`
   contract, bounded hosted requests, and host-owned credentials.
 - **Sandboxed data execution:** `python_run_tool` executes bounded source using a configured
   interpreter inside the agent's per-run container. Its tool schema, output, timeout, and sandbox
   policy are part of the Python API contract.
-- **Built-in knowledge ingestion:** UTF-8 `.log` files use the same bounded text parser as Markdown
-  and plain text and are not interpreted as a particular log format. `MarkupTextParser`, `TOMLTextParser`, and `YAMLTextParser` parse bounded source and structured
-  configuration files into searchable text; `ParquetTextParser` parses bounded flat tables into
-  row-labeled pages when the optional `parquet` extra is installed; `ICalendarTextParser` parses
-  bounded UTF-8 iCalendar event, task, and journal records into cited pages with filterable metadata;
-  `RSSAtomTextParser` parses bounded
-  RSS 1.0/2.0 and Atom files into one cited, filterable page per feed entry; `VCardTextParser`
-  parses bounded UTF-8 vCard 2.1, 3.0, and 4.0 records into one cited, filterable page per contact;
-  `MboxTextParser` indexes separator-framed mail archives using the attachment-excluding MIME parser;
-  `ODPTextParser` reads OpenDocument Presentation slides into cited pages with slide-name metadata.
+- **Built-in knowledge ingestion:** `FileIngestor` indexes bounded UTF-8 `.txt`, `.log`, `.md`, and
+  `.markdown` files. Hosts can inject additional trusted `FileParser` implementations.
 - **Skill publisher trust:** `SkillTrustPolicy`, `load_skill_trust_keys`, host-owned
   `KEY_ID.pub` trust-directory validation, `SkillRevocationChecker`, `SkillRevocationStore`, and
   the documented construction-time snapshot and revocation contracts. `RedisSkillRevocationStore`
@@ -56,11 +45,6 @@ The v1.0 release will support these contracts:
 - **HTTP:** `create_app`, `StreamJournal`, `StreamJournalSnapshot`, `POST /v1/agents/{agent_name}/run`,
   `POST /v1/agents/{agent_name}/stream`, and `GET /health`, with their documented schemas, status
   codes, authorization rules, response limits, and SSE event names and payloads.
-- **Local MCP integration:** `create_mcp_server` and `gabby mcp` over stdio when the optional `mcp`
-  extra is installed; remote deployments continue to use the authenticated HTTP API.
-- **MCP client bridge:** `register_mcp_tools` imports tools from a host-connected MCP client into a
-  `ToolRegistry`. The host owns the connection and its transport security; only text or structured
-  JSON results enter Gabby tool context.
 - **Anthropic provider:** `AnthropicProvider` is available as a built-in optional provider using the
   native Messages API. Its live model and hosted endpoint support is supported only for the exact
   combinations verified and named in each release's notes.

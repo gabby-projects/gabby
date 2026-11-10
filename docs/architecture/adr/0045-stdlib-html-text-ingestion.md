@@ -1,6 +1,6 @@
 # ADR 0045: Dependency-free bounded HTML text ingestion
 
-**Status:** Accepted.  
+**Status:** Superseded by ADR 0125.
 **Date:** 2026-10-01.
 
 ## Context

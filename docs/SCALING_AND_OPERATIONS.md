@@ -27,32 +27,7 @@ local and modest corpora where predictable setup and exact results matter. There
 chunk-count cutoff: measure latency and memory with representative vector dimensions, filters,
 concurrency, and hardware before choosing a backend.
 
-For larger or shared deployments, Gabby includes `PostgresVectorStore` using pgvector's HNSW cosine
-index. Install the `postgres` extra, apply the vector migration, and use a host-owned PostgreSQL
-pool. For coordinated lexical and vector reindexing across hosts, use the PostgreSQL lexical store,
-PostgreSQL vector store, and `PostgresGenerationManifestStore` in the same consistency domain. The
-manifest coordinates durable generations and fencing; it does not make local SQLite indexes
-shared or manage the host's pool, credentials, TLS, migration, or backup lifecycle.
-
-See the [PostgreSQL hybrid indexing example](README_GUIDE.md#knowledge-retrieval),
-[vector store reference](EXTENSIONS.md), and [integration checks](../tests/integration/README.md).
-
-## Streaming and local Transformers
-
-Hosted providers that implement Gabby's streaming contract can emit text and tool progress through
-SSE. The local `TransformersProvider` emits bounded token deltas while generating when no tools are
-available. If tools are available, it buffers and parses the complete response because tool-control
-tokens are model-specific; this avoids exposing them as user-facing text. Tool-enabled local runs can
-therefore still have a pause before output. For interactive tool-enabled local inference, use a local
-inference server with a compatible streaming API (for example an OpenAI-compatible endpoint), or a
-hosted provider with native streaming.
-
-Live provider latency and compatibility are service- and model-dependent. The opt-in checks in
-[`tests/integration/README.md`](../tests/integration/README.md) exercise completion and streaming
-against configured endpoints. They verify basic contract compatibility, not service-level latency,
-long-duration reliability, model quality, or schema stability. Run them using protected environment
-secrets before changing providers or models; retain production monitoring and bounded retries at the
-host boundary.
+Hosts can implement the vector and manifest extension contracts when their corpus or deployment requires a different storage model. Gabby does not ship a shared or multi-host database backend.
 
 ## Container engine and platform support
 
@@ -95,7 +70,7 @@ and [structured output guide](STRUCTURED_OUTPUT.md).
 
 Before scaling a Gabby deployment, record evidence for the actual configuration:
 
-- Run the regular local suite and focused provider, PostgreSQL, and container acceptance checks that
+- Run the regular local suite and focused provider and container acceptance checks that
   match the target deployment.
 - Measure end-to-end latency, throughput, worker saturation, request/response sizes, and resource
   use with representative workloads.
@@ -111,9 +86,8 @@ Before scaling a Gabby deployment, record evidence for the actual configuration:
 | Concern | Current disposition |
 |---|---|
 | Stuck synchronous callbacks | Worker threads and the waiting queue are bounded; new tool calls receive `capacity_exhausted` after saturation. A running Python callback still cannot be forcibly stopped. Use a container or separate process when hard termination is required. |
-| Linear SQLite vector search | This remains an exact local backend with linear scan cost. Gabby makes no universal chunk threshold claim. PostgreSQL/pgvector HNSW is the included larger/shared-index option. |
-| Multi-host manifest setup | `PostgresGenerationManifestStore`, `PostgresKnowledgeStore`, and `PostgresVectorStore` are implemented and compose through `HybridIndexCoordinator`. The host still applies three migrations and supplies one pool/consistency domain; the guide has a complete constructor example. |
-| Local Transformers streaming | Tool-free calls now stream bounded token deltas. Calls where tools are available still buffer for safe model-specific tool parsing. |
+| Linear SQLite vector search | This remains an exact local backend with linear scan cost. Gabby makes no universal chunk threshold claim. hosts can provide a different vector backend through the extension contract. |
+| Multi-host manifest setup | Not provided as a built-in backend. Hosts may implement the storage contracts and are responsible for consistency, migrations, and operational validation. |
 | Mocked provider acceptance | Opt-in real completion/stream checks are documented for Ollama, Hugging Face, Anthropic, and Gemini. They require credentials or a local service and are not run in ordinary CI; they do not guarantee provider uptime or schema stability. |
 | Docker version floor | The Windows Docker floor remains fail-closed because older daemons can fail when networking is disabled. There is no unsafe fallback that enables networking. Linux containers do not use this Windows-specific floor. |
 | Strict tool schemas | Runtime validation remains mandatory. Developers can start with a broad JSON-only schema and refine it before release; Gabby does not silently pass invalid values through. |

@@ -7,7 +7,7 @@
 
 Each execution already returns an `ExecutionTrace`, but applications cannot export events while a
 run is in progress through a framework extension point. Core should support host-owned telemetry
-without taking a dependency on OpenTelemetry or a particular storage service.
+without coupling the runtime to a vendor-specific telemetry SDK or storage service.
 
 ## Decision
 
@@ -32,7 +32,7 @@ trace event data as potentially sensitive and implement its own filtering and re
 
 - Export only the complete trace after a run: simpler, but provides no live progress to external
   telemetry systems and misses the opportunity to persist events before an interrupted response.
-- Add OpenTelemetry to core: provides a mature ecosystem, but couples the framework contract and
+- Bundle a vendor-specific telemetry SDK: provides an ecosystem, but couples the framework contract and
   dependency graph to one telemetry API and package stack.
 - Fail the execution when tracing fails: guarantees telemetry completeness, but makes an optional
   observability integration an availability dependency for agent work.

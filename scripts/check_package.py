@@ -37,13 +37,9 @@ EXPECTED_VERSION = PROJECT["version"]
 REQUIRED_PUBLIC_EXPORTS = frozenset(
     {
         "Agent",
-        "CSVTextParser",
-        "JSONTextParser",
         "MarkupTextParser",
         "NvidiaReranker",
-        "PDFTextParser",
-        "PostgresStreamJournal",
-        "TransformersProvider",
+        "Utf8TextParser",
     }
 )
 
@@ -153,30 +149,9 @@ def _check_wheel(path: Path) -> list[str]:
             ("gabby/ingestion.py", "the ingestion implementation"),
             ("gabby/training.py", "the optional adapter training implementation"),
             ("gabby/py.typed", "the PEP 561 typing marker"),
-            ("gabby/sql/postgres_stream_journal.sql", "the PostgreSQL SSE journal migration"),
-            ("gabby/sql/postgres_knowledge.sql", "the PostgreSQL knowledge migration"),
-            ("gabby/sql/postgres_vector.sql", "the PostgreSQL vector migration"),
         ):
             if name not in names:
                 errors.append(f"{path}: missing {description}: {name}")
-        migration_name = "gabby/sql/postgres_stream_journal.sql"
-        if migration_name in names:
-            packaged = archive.read(migration_name)
-            source = (ROOT / "sql" / "postgres_stream_journal.sql").read_bytes()
-            if packaged != source:
-                errors.append(f"{path}: packaged PostgreSQL SSE journal migration is stale")
-        knowledge_migration = "gabby/sql/postgres_knowledge.sql"
-        if knowledge_migration in names:
-            packaged = archive.read(knowledge_migration)
-            source = (ROOT / "sql" / "postgres_knowledge.sql").read_bytes()
-            if packaged != source:
-                errors.append(f"{path}: packaged PostgreSQL knowledge migration is stale")
-        vector_migration = "gabby/sql/postgres_vector.sql"
-        if vector_migration in names:
-            packaged = archive.read(vector_migration)
-            source = (ROOT / "sql" / "postgres_vector.sql").read_bytes()
-            if packaged != source:
-                errors.append(f"{path}: packaged PostgreSQL vector migration is stale")
         if "gabby/__init__.py" in names:
             errors.extend(_public_api_errors(archive.read("gabby/__init__.py"), path))
         if not any(name.endswith(".dist-info/WHEEL") for name in names):
@@ -217,49 +192,10 @@ def _check_sdist(path: Path) -> list[str]:
             ("/src/gabby/ingestion.py", "the ingestion implementation"),
             ("/src/gabby/training.py", "the optional adapter training implementation"),
             ("/src/gabby/py.typed", "the PEP 561 typing marker"),
-            (
-                "/src/gabby/sql/postgres_stream_journal.sql",
-                "the PostgreSQL SSE journal migration",
-            ),
-            (
-                "/src/gabby/sql/postgres_knowledge.sql",
-                "the PostgreSQL knowledge migration",
-            ),
-            ("/src/gabby/sql/postgres_vector.sql", "the PostgreSQL vector migration"),
             ("/LICENSE", "the project license"),
         ):
             if not any(name.endswith(suffix) for name in names):
                 errors.append(f"{path}: missing {description} ({suffix})")
-        packaged_migrations = [
-            name for name in names if name.endswith("/src/gabby/sql/postgres_stream_journal.sql")
-        ]
-        if len(packaged_migrations) == 1:
-            member = archive.extractfile(packaged_migrations[0])
-            if (
-                member is None
-                or member.read() != (ROOT / "sql" / "postgres_stream_journal.sql").read_bytes()
-            ):
-                errors.append(f"{path}: packaged PostgreSQL SSE journal migration is stale")
-        packaged_knowledge_migrations = [
-            name for name in names if name.endswith("/src/gabby/sql/postgres_knowledge.sql")
-        ]
-        if len(packaged_knowledge_migrations) == 1:
-            member = archive.extractfile(packaged_knowledge_migrations[0])
-            if (
-                member is None
-                or member.read() != (ROOT / "sql" / "postgres_knowledge.sql").read_bytes()
-            ):
-                errors.append(f"{path}: packaged PostgreSQL knowledge migration is stale")
-        packaged_vector_migrations = [
-            name for name in names if name.endswith("/src/gabby/sql/postgres_vector.sql")
-        ]
-        if len(packaged_vector_migrations) == 1:
-            member = archive.extractfile(packaged_vector_migrations[0])
-            if (
-                member is None
-                or member.read() != (ROOT / "sql" / "postgres_vector.sql").read_bytes()
-            ):
-                errors.append(f"{path}: packaged PostgreSQL vector migration is stale")
     return errors
 
 

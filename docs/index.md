@@ -17,13 +17,11 @@ roadmap and scorecard separate implementation from release evidence.
 - [Project overview and quick start](../README.md) — understand Gabby's governance and execution
   boundary and run the offline starter flow.
 - [Complete user guide](README_GUIDE.md) — install Gabby, configure providers, define agents, use
-  skills, tools, and knowledge, and run the Python, HTTP, and MCP interfaces.
+  skills, tools, and knowledge, and use the Python and HTTP interfaces.
 - [Examples](../examples/README.md) — runnable offline examples and a hosted-service example.
 - [CLI and API guide](../README.md#cli-and-api) — use the `gabby` developer command line and
   local service.
 - [Python HTTP client](CLIENT.md) — call the stateless HTTP API from another Python application.
-- [MCP integration](MCP.md) — expose an agent to a local MCP host or import tools from a host-owned
-  MCP client.
 
 ## Architecture and contracts
 

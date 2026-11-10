@@ -1,6 +1,6 @@
 # ADR 0073: Optional local Transformers embedding provider
 
-- Status: Accepted under the architect's delegated implementation authority
+- Status: Superseded; local Transformers loading removed under the architect's delegated implementation authority
 - Date: 2026-10-02
 
 ## Context

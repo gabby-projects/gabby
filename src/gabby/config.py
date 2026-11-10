@@ -75,7 +75,6 @@ _BUILTIN_MODEL_PROVIDERS = frozenset(
         "huggingface",
         "anthropic",
         "gemini",
-        "transformers",
     }
 )
 _SEMVER_PATTERN = re.compile(

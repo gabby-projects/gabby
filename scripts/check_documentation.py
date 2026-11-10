@@ -41,11 +41,12 @@ def python_files() -> list[Path]:
 
 
 def markdown_files() -> list[Path]:
-    """Return repository Markdown files, excluding generated files and environments."""
+    """Return project Markdown files, excluding generated files and agent instructions."""
     return sorted(
         path
         for path in ROOT.rglob("*.md")
         if not {".git", ".venv", "dist", "build"}.intersection(path.parts)
+        and path.name != "AGENTS.md"
     )
 
 

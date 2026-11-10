@@ -36,8 +36,8 @@ endpoint, respect its token limits, and verify compatibility for their deploymen
 
 - **Keep all embedding clients host supplied:** rejected because it leaves the first-party hybrid
   retrieval path incomplete for common endpoints.
-- **Bundle a local Transformers model:** deferred because model weights and hardware dependencies
-  should remain optional and model-specific.
+- **Bundle a local embedding model:** rejected because loading model weights is outside Gabby's
+  runtime and governance boundary; hosts may inject an `EmbeddingProvider` when needed.
 - **Add a Hugging Face-specific feature-extraction client now:** deferred; it is a separate API and
   should be added as another `EmbeddingProvider` adapter with its own contract and acceptance tests.
 

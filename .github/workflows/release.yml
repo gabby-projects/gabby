@@ -29,9 +29,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install uv==0.13.5
       - if: runner.os != 'Windows'
-        run: uv sync --frozen --group dev --extra server --extra auth --extra observability --extra skill-signing --extra pdf-ocr --extra parquet --extra mcp --python '${{ matrix.python-version }}'
+        run: uv sync --frozen --group dev --extra server --extra auth --extra skill-signing --python '${{ matrix.python-version }}'
       - if: runner.os == 'Windows'
-        run: uv sync --frozen --group dev --extra server --extra auth --extra observability --extra skill-signing --extra pdf-ocr --extra parquet --extra windows-sandbox --extra mcp --python '${{ matrix.python-version }}'
+        run: uv sync --frozen --group dev --extra server --extra auth --extra skill-signing --extra windows-sandbox --python '${{ matrix.python-version }}'
       - run: uv run --no-sync pytest --cov=gabby --cov-report=term-missing
 
   sandbox-live:
@@ -45,7 +45,7 @@ jobs:
         with:
           python-version: "3.14"
       - run: python -m pip install uv==0.13.5
-      - run: uv sync --frozen --group dev --extra server --extra auth --extra observability --extra skill-signing --python '3.14'
+      - run: uv sync --frozen --group dev --extra server --extra auth --extra skill-signing --python '3.14'
       - name: Start and verify Docker daemon
         run: |
           sudo systemctl start docker
@@ -62,9 +62,6 @@ jobs:
   deployment-container:
     uses: ./.github/workflows/container-validation.yml
 
-  postgres-live:
-    uses: ./.github/workflows/postgres-validation.yml
-
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -80,7 +77,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install uv==0.13.5
-      - run: uv sync --frozen --group dev --extra server --extra auth --extra transformers --extra observability --extra skill-signing --extra pdf-ocr --extra parquet --extra windows-sandbox --extra mcp --python '${{ matrix.python-version }}'
+      - run: uv sync --frozen --group dev --extra server --extra auth --extra skill-signing --extra windows-sandbox --python '${{ matrix.python-version }}'
       - run: uv lock --check
       - run: uv run --no-sync ruff check src tests scripts examples
       - run: uv run --no-sync ruff format --check src tests scripts examples
@@ -96,7 +93,7 @@ jobs:
       - run: uv run --no-sync pip-audit --skip-editable --progress-spinner off
 
   build:
-    needs: [platform, quality, sandbox-live, deployment-container, postgres-live]
+    needs: [platform, quality, sandbox-live, deployment-container]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

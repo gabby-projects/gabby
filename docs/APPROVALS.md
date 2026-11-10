@@ -30,44 +30,7 @@ storage; oversized or non-JSON arguments fail closed.
 The database remains host-owned. The application must set filesystem permissions, choose retention
 and backup policies, and restrict access. This is a local single-host SQLite option.
 
-For shared PostgreSQL storage, Gabby includes `PostgresApprovalAudit`. It accepts a host-owned async
-pool with an `execute(query, *args)` operation; `asyncpg.Pool` is compatible. Gabby does not install
-an SQL driver, create tables, read credentials, or close the pool. Create this table once through
-your migration system:
-
-```sql
-CREATE TABLE gabby_tool_approval_audit (
-    run_id TEXT NOT NULL,
-    call_id TEXT NOT NULL,
-    agent_name TEXT NOT NULL,
-    tool_name TEXT NOT NULL,
-    principal_subject TEXT,
-    arguments_sha256 CHAR(64) NOT NULL,
-    approved BOOLEAN NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (run_id, call_id)
-);
-```
-
-Then inject the pool-backed sink:
-
-```python
-import asyncpg  # Host dependency; Gabby does not require it.
-from gabby import AuditedApprovalHandler, PostgresApprovalAudit
-
-pool = await asyncpg.create_pool(dsn=database_dsn)
-audit = PostgresApprovalAudit(pool)
-approval_handler = AuditedApprovalHandler(review_in_my_app, audit)
-```
-
-The host creates the pool with credentials and TLS settings from its secret manager, runs schema
-migrations, and closes the pool during application shutdown. PostgreSQL keeps only invocation
-metadata, the decision, and a SHA-256 of canonical arguments; raw arguments are never stored.
-Principal subjects remain omitted unless `include_principal_subject=True`. Duplicate `(run_id,
-call_id)` values violate the primary key and fail closed rather than silently replacing an earlier
-decision.
-
-Both sinks implement `ApprovalAuditSink`. A sink must finish recording before returning. If it
+The sink implements `ApprovalAuditSink` and must finish recording before returning. If it
 raises or times out, Gabby fails closed and does not execute the tool. The host remains responsible
 for backend durability, idempotency, availability, retention, and access control.
 `AuditedApprovalHandler` does not catch backend exceptions; Gabby's runtime turns them into a
@@ -76,5 +39,4 @@ sanitized approval-unavailable tool failure.
 See [the runnable example](../examples/approval_audit.py),
 [the approval decision](architecture/adr/0025-host-owned-tool-approval.md), and
 [ADR 0093](architecture/adr/0093-reusable-sqlite-approval-audit.md) and
-[ADR 0102](architecture/adr/0102-approval-audit-sink-contract.md) and
-[ADR 0103](architecture/adr/0103-postgres-approval-audit.md).
+[ADR 0102](architecture/adr/0102-approval-audit-sink-contract.md).

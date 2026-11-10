@@ -266,12 +266,6 @@ For shared storage beyond the same-host SQLite boundary, inject an async `Stream
 `create_app(..., stream_journal=backend)` or `serve(..., stream_journal=backend)`. The host owns the
 backend's initialization, credentials, durability, and shutdown. Implement its atomic session and
 event operations as documented in the [extension contract](EXTENSION_CONTRACTS.md#extension-matrix).
-Gabby also provides `PostgresStreamJournal` over the host-owned asyncpg-compatible pool. Install the
-`postgres` extra and apply the packaged `gabby/sql/postgres_stream_journal.sql` migration through
-the application's migration system before injecting `PostgresStreamJournal(pool)`. It uses
-PostgreSQL server time for expiry
-and serializes global capacity checks across replicas. The host still owns pool lifecycle, TLS,
-credentials, backups, availability, and schema migration.
 
 The repository includes a complete [Nginx configuration](../deploy/nginx.conf) with a rate-limited
 run and stream route, streaming-safe proxy settings, an unthrottled health route, and a default 404.
@@ -343,31 +337,9 @@ identity.
 SQLite FTS5 and the SQLite generation manifest are local persistent files. Keep them on a supported
 local filesystem, not a network filesystem. Place database files outside workspaces mounted
 read/write into agent containers. Back up both lexical and manifest databases consistently, protect
-their contents as application data, and define retention and restore procedures. Multi-host indexing
-can use `PostgresGenerationManifestStore` with a host-owned pool, externally applied migration,
-atomic lease claims, and the PostgreSQL server clock. The host owns TLS, credentials, routing,
-migrations, backups, and read-after-write consistency. Multi-host indexing also requires shared
-generation-aware lexical and vector backends that durably enforce fencing tokens; the PostgreSQL
-manifest alone does not make SQLite data files shareable.
-
-`PostgresKnowledgeStore` supplies the generation-aware lexical backend through the same
-host-owned PostgreSQL consistency domain. Apply its migration alongside the generation-manifest
-migration. Pair it with a generation-aware vector store that enforces the same fencing tokens;
-never run direct `replace_source` or `delete_source` calls against a store managed by
-`HybridIndexCoordinator`.
-
-Gabby includes `PostgresVectorStore` for pgvector deployments. The database administrator must
-install pgvector 0.8.0 or newer before applying `sql/postgres_vector.sql`; replace
-`__GABBY_VECTOR_DIMENSIONS__` in that migration with the embedding model's dimension first. The
-migration role must have permission to create the extension when it is absent. Configure every
-`PostgresVectorStore` with the same dimension and embedding space used by the migration. The
-migration seeds that dimension in the store configuration, so a worker with a mismatched setting
-fails closed instead of setting the shared dimension on first use.
-HNSW supports up to 2,000 dimensions; choose a different `VectorStore` backend for embeddings above
-that limit. Search enables strict-order iterative scans to compensate when metadata or generation
-filters remove nearest candidates. Results can still be limited by the configured maximum scan
-tuples. HNSW search is approximate, so evaluate recall and tune `ef_search` and `max_scan_tuples` on
-representative data before setting service quality targets.
+their contents as application data, and define retention and restore procedures. The bundled SQLite
+stores are single-host components. Hosts that need shared or multi-host storage can implement the
+documented storage contracts and own their database, migrations, and consistency model.
 
 The bundled text ingestor supports UTF-8 Markdown, plain text, and `.log` files. Log files are
 indexed as UTF-8 text; Gabby does not infer timestamps, severity, or application-specific fields.

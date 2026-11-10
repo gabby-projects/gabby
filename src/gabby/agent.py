@@ -56,7 +56,6 @@ from .models import (
     ModelProvider,
     OllamaProvider,
     OpenAICompatibleProvider,
-    TransformersProvider,
 )
 from .planning import ModelPlanner, Planner
 from .runtime import AgentStreamEvent, ExecutionResult, RunRequest, Runtime
@@ -515,8 +514,6 @@ class Agent:
             return AnthropicProvider.from_config(config)
         if provider == "gemini":
             return GeminiProvider.from_config(config)
-        if provider == "transformers":
-            return TransformersProvider.from_config(config)
         raise ConfigError(
             f"No built-in model provider named {provider!r}; pass a ModelProvider instance"
         )

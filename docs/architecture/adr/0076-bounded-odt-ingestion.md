@@ -1,6 +1,6 @@
 # ADR 0076: Bounded OpenDocument Text ingestion
 
-- Status: Accepted under the architect's delegated implementation authority
+- Status: Superseded by ADR 0125
 - Date: 2026-10-02
 
 ## Context
