@@ -34,3 +34,7 @@ enhancement:
 roadmap:
   - head-branch:
       - "^roadmap(?:/|-|$)"
+
+chore:
+  - head-branch:
+      - "^chore(?:/|-|$)"
