@@ -1,67 +1,5 @@
 # Live integration acceptance
 
-## PostgreSQL hybrid-index manifest
-
-The optional contract suite checks shared lease ownership, fencing, activation, and retirement
-against a live server. Install the extra, set a test database DSN, and run:
-
-```sh
-uv sync --all-groups --extra postgres
-GABBY_POSTGRES_DSN='postgresql://user:password@localhost/test_db' \
-  uv run --frozen pytest tests/integration/test_postgres_indexing_live.py -q
-```
-
-The test creates and drops a uniquely named schema in the configured database and applies
-`sql/postgres_generation_manifest.sql`. Use a disposable test database and a role allowed to create
-schemas. The adapter assumes the host has already applied the migration in production.
-
-## PostgreSQL shared knowledge store
-
-The opt-in store suite checks full-text retrieval, exact metadata filters, transactional source
-replacement, generation filtering, and stale-writer fencing against PostgreSQL. Run it with the
-same disposable database and `postgres` extra:
-
-```sh
-uv sync --all-groups --extra postgres
-GABBY_POSTGRES_DSN='postgresql://user:password@localhost/test_db' \
-  uv run --frozen pytest tests/integration/test_postgres_knowledge_live.py -q
-```
-
-The suite creates and removes an isolated schema and applies `sql/postgres_knowledge.sql`.
-
-## PostgreSQL shared vector store
-
-The opt-in vector suite requires PostgreSQL with pgvector 0.8.0 or newer installed and a
-database role allowed to create the extension when needed, create schemas, and drop them. It checks
-cosine ordering, exact metadata filters, source replacement, generation visibility, dimension
-consistency, stale-writer rejection, and cleanup:
-
-```sh
-uv sync --all-groups --extra postgres
-GABBY_POSTGRES_DSN='postgresql://user:password@localhost/test_db' \
-  uv run --frozen pytest tests/integration/test_postgres_vector_live.py -q
-```
-
-The test creates and removes an isolated schema and applies `sql/postgres_vector.sql`. Use a
-disposable test database; the migration installs pgvector in `public` if it is not already present.
-The reusable PostgreSQL acceptance workflow runs this suite against the versioned
-`pgvector/pgvector:0.8.6-pg17-trixie` service image.
-
-## PostgreSQL resumable SSE journal
-
-The optional journal suite checks shared session capacity, principal/request binding, bounded
-ordered replay, completion, and abandoned-run recovery across pool connections. Use the same
-`GABBY_POSTGRES_DSN` and optional extra, then run:
-
-```sh
-uv sync --all-groups --extra postgres
-GABBY_POSTGRES_DSN='postgresql://user:password@localhost/test_db' \
-  uv run --frozen pytest tests/integration/test_postgres_stream_journal_live.py -q
-```
-
-It creates an isolated schema and applies `sql/postgres_stream_journal.sql`. Use a disposable test
-database and a role allowed to create schemas. Production hosts apply the migration themselves.
-
 ## Container sandbox
 
 These checks use a real Docker or Podman Linux runtime and are separate from the ordinary test
@@ -125,7 +63,7 @@ do not support named pipes are rejected by the transport.
 ## Live model-provider acceptance
 
 These checks contact real model providers, so they are opt-in and skipped in the normal test
-suite. Hosted providers receive one completion and one streaming completion; local Transformers
+suite. Hosted providers receive one completion and one streaming completion;
 acceptance loads a selected checkpoint and runs one bounded completion. Use a model endpoint,
 checkpoint, and account approved for the prompts used by these smoke tests.
 
@@ -188,26 +126,6 @@ uv run --frozen pytest tests/integration/test_nvidia_reranker_live.py -q
 The default endpoint is NVIDIA's hosted NeMo reranking API. Review [its API reference](https://docs.api.nvidia.com/nim/reference/nvidia-nim-rerankqa-mistral-4b-v3-infer)
 and service terms before enabling the check; account usage charges may apply.
 
-## Local Transformers reranking
-
-This opt-in check loads a sequence-classification checkpoint and verifies bounded ranking output
-and candidate identity mapping. It does not measure relevance quality. Install Gabby's `transformers`
-extra and a host-compatible PyTorch build first; choose a reviewed checkpoint and pin its Hub commit.
-
-```sh
-GABBY_RUN_TRANSFORMERS_RERANKER_INTEGRATION=1 \
-GABBY_TRANSFORMERS_RERANKER_MODEL=your-org/your-cross-encoder \
-GABBY_TRANSFORMERS_RERANKER_REVISION=your-reviewed-commit \
-GABBY_TRANSFORMERS_RERANKER_LOCAL_FILES_ONLY=1 \
-GABBY_TRANSFORMERS_DEVICE=cpu \
-uv run --frozen pytest tests/integration/test_transformers_reranker_live.py -q
-```
-
-The model must be a local or cached Hugging Face sequence classifier. Set
-`GABBY_TRANSFORMERS_RERANKER_LOCAL_FILES_ONLY=0` for the first run when downloading is intended;
-subsequent checks can use `1` to stay offline. Private checkpoints can use `HF_TOKEN` through the
-host environment. Gabby disables custom model code and requires safetensors weights.
-
 ## Ollama
 
 Make sure Ollama is running and the selected model is available locally, then run:
@@ -269,109 +187,6 @@ GenerateContent API. The default endpoint is Google's `v1beta` API; set `GABBY_G
 for an approved compatible endpoint. It can incur API usage charges. Keep `GEMINI_API_KEY` in a
 secret manager or protected environment injection and out of shell history. Model and API
 availability depends on the account and selected model.
-
-## Local Hugging Face Transformers
-
-Install Gabby's `transformers` extra and a PyTorch 2.5+ build appropriate for the host's CPU or
-accelerator. Point the test at a cached local checkpoint or a Hub model already available to the
-host. Downloads are disabled by default for this acceptance command; set
-`GABBY_TRANSFORMERS_LOCAL_FILES_ONLY=0` when you intend to download the configured model.
-
-```sh
-uv sync --extra transformers
-GABBY_RUN_TRANSFORMERS_INTEGRATION=1 \
-GABBY_TRANSFORMERS_MODEL=/path/to/local/chat-checkpoint \
-GABBY_TRANSFORMERS_DEVICE=cpu \
-uv run --frozen pytest tests/integration/test_model_providers_live.py -k local_transformers -q
-```
-
-Set `GABBY_TRANSFORMERS_DEVICE` to a supported PyTorch device such as `cuda` or `mps` when that
-runtime is installed. `GABBY_TRANSFORMERS_REVISION` optionally pins a Hub commit. The acceptance
-uses no tools and makes no claim about tool-template support, throughput, model quality, or
-accelerator isolation. It verifies normal completion and incremental SSE text for a tool-free call.
-Tool-enabled local calls buffer each provider response for model-specific tool parsing, so they do
-not yet provide token-by-token text. Run a separate reviewed test with the selected model before
-relying on its structured tool-call parser.
-
-### Structured local tool-call parsing
-
-This provider-level acceptance checks that a real model sees a tool schema and that its Transformers
-tokenizer parses the response into Gabby's normalized tool-call contract. The model must emit one
-tool call without unrelated assistant text in the same completion. This check does not measure tool
-selection quality or prove that every model follows Gabby's multi-step runtime loop; deterministic
-runtime tests cover dispatch and observation handling separately.
-
-`tool_response_template` is model-specific. The schema below is for the pinned Qwen checkpoint and
-should not be copied to another model without reviewing its chat and response formats.
-
-```sh
-HF_HOME=/tmp/gabby-hf-cache \
-HF_HUB_CACHE=/tmp/gabby-hf-cache/hub \
-GABBY_RUN_TRANSFORMERS_TOOL_INTEGRATION=1 \
-GABBY_TRANSFORMERS_MODEL=Qwen/Qwen2.5-Coder-0.5B-Instruct \
-GABBY_TRANSFORMERS_REVISION=ea3f2471cf1b1f0db85067f1ef93848e38e88c25 \
-GABBY_TRANSFORMERS_LOCAL_FILES_ONLY=1 \
-GABBY_TRANSFORMERS_DEVICE=cpu \
-GABBY_TRANSFORMERS_TOOL_RESPONSE_TEMPLATE='{"start_anchor":"<|im_start|>assistant","fields":{"tool_calls":{"close":"<|im_end|>","content":"json","repeats":true}}}' \
-uv run --frozen pytest tests/integration/test_model_providers_live.py -k structured_tool_call -q
-```
-
-The pinned CPU acceptance passed locally with Transformers 5.18.0 and PyTorch 2.14.1+cpu. The
-checkpoint was already cached, so this command runs offline. To use another local or Hub model,
-change the model and revision and provide the response schema its tokenizer expects.
-
-A reproducible CPU completion smoke passed on 2026-10-02 with Transformers 5.18.0, PyTorch
-2.14.1+cpu, and [`HuggingFaceTB/SmolLM2-135M-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct)
-at revision `eba0825ddc7730d24a88685a6c0a078cf919b383`. The model card identifies the checkpoint as
-Apache-2.0 and documents its Transformers chat-template path. This verifies one model load and
-completion on CPU; it does not verify tool calling or output quality. The same acceptance also
-passed a second time with `GABBY_TRANSFORMERS_LOCAL_FILES_ONLY=1` against the cached checkpoint.
-
-To reproduce the pinned run on a CPU host:
-
-```sh
-uv sync --frozen --group dev --extra transformers
-uv pip install --python .venv/bin/python --index-url https://download.pytorch.org/whl/cpu \
-  'torch==2.14.1+cpu'
-HF_HOME=/tmp/gabby-hf-cache \
-HF_HUB_CACHE=/tmp/gabby-hf-cache/hub \
-GABBY_RUN_TRANSFORMERS_INTEGRATION=1 \
-GABBY_TRANSFORMERS_MODEL=HuggingFaceTB/SmolLM2-135M-Instruct \
-GABBY_TRANSFORMERS_REVISION=eba0825ddc7730d24a88685a6c0a078cf919b383 \
-GABBY_TRANSFORMERS_LOCAL_FILES_ONLY=0 \
-GABBY_TRANSFORMERS_DEVICE=cpu \
-uv run --no-sync pytest tests/integration/test_model_providers_live.py -k local_transformers -q
-```
-
-## Local Transformers embeddings
-
-This acceptance loads a model locally, batches two texts through `TransformersEmbeddingProvider`,
-and checks vector count, dimensions, finite values, and default unit normalization. It does not
-measure semantic quality or retrieval quality. Downloads are disabled by default:
-
-If the pinned checkpoint is not in this cache yet, run the preceding pinned CPU completion setup
-once with `GABBY_TRANSFORMERS_LOCAL_FILES_ONLY=0`; both acceptance checks use the same model and
-cache directory. The embedding command below then loads it offline.
-
-```sh
-HF_HOME=/tmp/gabby-hf-cache \
-HF_HUB_CACHE=/tmp/gabby-hf-cache/hub \
-GABBY_RUN_TRANSFORMERS_EMBEDDINGS_INTEGRATION=1 \
-GABBY_TRANSFORMERS_EMBEDDINGS_MODEL=HuggingFaceTB/SmolLM2-135M-Instruct \
-GABBY_TRANSFORMERS_EMBEDDINGS_REVISION=eba0825ddc7730d24a88685a6c0a078cf919b383 \
-GABBY_TRANSFORMERS_EMBEDDINGS_LOCAL_FILES_ONLY=1 \
-GABBY_TRANSFORMERS_EMBEDDINGS_DEVICE=cpu \
-uv run --frozen pytest tests/integration/test_transformers_embeddings_live.py -q
-```
-
-The pinned CPU smoke passed on 2026-10-02 with Transformers 5.18.0 and PyTorch 2.14.1+cpu using
-`HuggingFaceTB/SmolLM2-135M-Instruct` at revision
-`eba0825ddc7730d24a88685a6c0a078cf919b383` and local-only loading. This validates model loading,
-pooling, and normalized finite output; it does not measure semantic embedding quality. Install the
-`transformers` extra and a host-compatible PyTorch build first. Set
-`GABBY_TRANSFORMERS_EMBEDDINGS_LOCAL_FILES_ONLY=0` only when you intend to download another model.
-Use a checkpoint supported by standard `AutoModel` with safetensors weights; Gabby disables custom
-remote code and requires safetensors loading.
 
 ## Both providers
 

@@ -458,46 +458,6 @@ def test_cli_serve_injects_the_configured_knowledge_database(
     assert retriever.path == database
 
 
-def test_cli_mcp_starts_stdio_server_with_configured_response_bound(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import gabby.cli as cli_module
-    import gabby.mcp_adapter as mcp_module
-
-    definition = SimpleNamespace(name="mcp-agent", knowledge={})
-    captured: dict[str, object] = {}
-
-    class FakeMCPServer:
-        def run(self, *, transport: str) -> None:
-            captured["transport"] = transport
-
-    monkeypatch.setattr(cli_module, "load_agent", lambda _path: definition)
-    monkeypatch.setattr(cli_module, "Agent", _FakeAgent)
-    monkeypatch.setattr(
-        mcp_module,
-        "create_mcp_server",
-        lambda agent, *, max_response_bytes: (
-            captured.update(agent=agent, max_response_bytes=max_response_bytes) or FakeMCPServer()
-        ),
-    )
-
-    assert main(["mcp", str(tmp_path / "agent.yaml"), "--max-response-bytes", "2048"]) == 0
-    assert captured["transport"] == "stdio"
-    assert captured["max_response_bytes"] == 2048
-
-
-def test_cli_mcp_rejects_invalid_response_bound(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    import gabby.cli as cli_module
-
-    monkeypatch.setattr(
-        cli_module, "load_agent", lambda _path: SimpleNamespace(name="mcp-agent", knowledge={})
-    )
-    assert main(["mcp", str(tmp_path / "agent.yaml"), "--max-response-bytes", "255"]) == 2
-    assert "--max-response-bytes must be at least 256" in capsys.readouterr().err
-
-
 def test_cli_evaluate_emits_json_and_returns_failure_status_for_regressions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

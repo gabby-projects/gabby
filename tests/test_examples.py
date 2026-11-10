@@ -27,10 +27,9 @@ import pytest
 from examples.agent_composition import run_example as run_composition_example
 from examples.approval_audit import AuditedApprovalHandler, SQLiteApprovalAudit
 from examples.hosted_service import create_app
-from examples.opentelemetry_tracer import OpenTelemetryEventTracer
 from examples.sqlite_data_agent import run_example as run_sqlite_data_example
 from examples.stateless_sse_client import stream_agent
-from gabby import Agent, AgentDefinition, ApprovalRequest, Principal, TraceEvent
+from gabby import Agent, AgentDefinition, ApprovalRequest, Principal
 from gabby.models import ModelResponse, ModelStreamDelta
 from gabby.server import create_app as create_gabby_app
 
@@ -58,40 +57,6 @@ class _ExampleStreamingModel:
     async def stream(self, **_kwargs: Any) -> AsyncIterator[ModelStreamDelta]:
         yield ModelStreamDelta(content_delta="Tree ")
         yield ModelStreamDelta(content_delta="cover grew.")
-
-
-class _FakeSpan:
-    def __init__(self) -> None:
-        self.end_time: int | None = None
-
-    def __enter__(self) -> _FakeSpan:
-        return self
-
-    def __exit__(self, *args: Any) -> None:
-        return None
-
-    def end(self, *, end_time: int) -> None:
-        self.end_time = end_time
-
-
-class _FakeOpenTelemetryTracer:
-    def __init__(self) -> None:
-        self.name: str | None = None
-        self.attributes: dict[str, Any] | None = None
-        self.start_time: int | None = None
-        self.span = _FakeSpan()
-
-    def start_span(
-        self,
-        name: str,
-        *,
-        attributes: dict[str, Any],
-        start_time: int,
-    ) -> _FakeSpan:
-        self.name = name
-        self.attributes = attributes
-        self.start_time = start_time
-        return self.span
 
 
 @pytest.mark.asyncio
@@ -271,68 +236,6 @@ async def test_stateless_sse_client_rejects_insecure_or_credentialed_base_urls(
             ]
 
 
-@pytest.mark.asyncio
-async def test_opentelemetry_example_exports_allowlisted_trace_attributes() -> None:
-    upstream = _FakeOpenTelemetryTracer()
-    exporter = OpenTelemetryEventTracer(upstream)
-    event = TraceEvent(
-        kind="model_response",
-        timestamp=1_750_000_000,
-        duration_ms=12.5,
-        details={
-            "step": 2,
-            "tool_call_count": 1,
-            "content": "private generated output",
-            "arguments": {"secret": "private tool input"},
-        },
-    )
-
-    await exporter.on_event(trace_id="run-123", agent_name="support", event=event)
-
-    assert upstream.name == "gabby.model_response"
-    assert upstream.start_time == 1_749_999_999_987_500_000
-    assert upstream.span.end_time == 1_750_000_000_000_000_000
-    assert upstream.attributes == {
-        "gabby.trace_id": "run-123",
-        "gabby.agent.name": "support",
-        "gabby.event.kind": "model_response",
-        "gabby.step": 2,
-        "gabby.tool_call_count": 1,
-        "gabby.event.duration_ms": 12.5,
-    }
-
-
-@pytest.mark.asyncio
-async def test_opentelemetry_example_works_with_optional_sdk() -> None:
-    trace_sdk = pytest.importorskip("opentelemetry.sdk.trace")
-    export_api = pytest.importorskip("opentelemetry.sdk.trace.export")
-    memory_export = pytest.importorskip("opentelemetry.sdk.trace.export.in_memory_span_exporter")
-    provider = trace_sdk.TracerProvider()
-    memory = memory_export.InMemorySpanExporter()
-    provider.add_span_processor(export_api.SimpleSpanProcessor(memory))
-    exporter = OpenTelemetryEventTracer(provider.get_tracer("gabby-test"))
-
-    await exporter.on_event(
-        trace_id="run-456",
-        agent_name="research",
-        event=TraceEvent(
-            kind="tool_error",
-            timestamp=1_750_000_000,
-            duration_ms=3.0,
-            details={"arguments": {"secret": "must not export"}},
-        ),
-    )
-
-    (span,) = memory.get_finished_spans()
-    assert span.name == "gabby.tool_error"
-    assert span.status.status_code.name == "ERROR"
-    assert span.attributes == {
-        "gabby.trace_id": "run-456",
-        "gabby.agent.name": "research",
-        "gabby.event.kind": "tool_error",
-        "gabby.event.duration_ms": 3.0,
-    }
-    provider.shutdown()
 
 
 @pytest.mark.asyncio

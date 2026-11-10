@@ -27,7 +27,7 @@ To give an agent a character the user wants, the user defines its instructions a
 
 Gabby is complementary to agent orchestration frameworks such as LangChain, CrewAI, and IBM BeeAI. Those frameworks help developers compose agents and workflows; Gabby focuses on the runtime boundary for a configured agent: enforcing tool permissions and policies, applying approvals and verification, bounding execution, and returning traceable results. Gabby does not aim to replace an application's orchestration layer. It can serve as the governed execution runtime for an agent or workflow selected and coordinated by the host application.
 
-The runtime is asynchronous first, with synchronous convenience methods and a FastAPI service. The same agent definition can be used from Python, through the versioned HTTP API, or as a local MCP server. Model providers, tools, retrieval, policy engines, verification, and tracing are replaceable through Python interfaces.
+The runtime is asynchronous first, with synchronous convenience methods and a FastAPI service. The same agent definition can be used from Python or through the versioned HTTP API. Model providers, tools, retrieval, policy engines, verification, and tracing are replaceable through Python interfaces.
 
 Gabby governs agent execution inside the runtime. It is not a hosted multi-tenant control plane, an identity-management system, or the owner of application conversations and durable memory. Host applications remain responsible for caller identity, long-term state, and deployment-level isolation. See the [architecture](docs/ARCHITECTURE.md) and [threat model](docs/THREAT_MODEL.md) for these boundaries.
 
@@ -55,12 +55,12 @@ An agent definition composes a model, environment, skills, tools, knowledge sour
 | Area | What Gabby provides |
 |---|---|
 | Execution | Async-first agent loop, sync wrappers, bounded steps and tool calls, deadlines, cancellation, optional planning and retries |
-| Models | OpenAI-compatible, Ollama, Hugging Face Inference Providers, Anthropic, Gemini, and optional local Transformers inference |
+| Models | OpenAI-compatible, Ollama, Hugging Face Inference Providers, Anthropic, Gemini |
 | Skills | Reusable, composable skill definitions, dependency resolution, package and registry workflows, optional Ed25519 publisher signatures |
 | Tools and policies | Schema-validated tools, explicit permissions, approval hooks, bounded results, runtime policy enforcement |
 | Isolation | Optional per-run Docker or Podman sandboxing for supported shell/filesystem tools; configuration and host determine the effective boundary |
-| Knowledge | Bounded ingestion, SQLite FTS5 and vector stores, hybrid retrieval contracts, pluggable embeddings and reranking |
-| Interfaces | Python API, FastAPI `/v1` run and SSE endpoints, optional local MCP stdio adapter |
+| Knowledge | Bounded plain-text and Markdown ingestion, SQLite FTS5 and vector stores, hybrid retrieval contracts, pluggable embeddings and reranking |
+| Interfaces | Python API and FastAPI `/v1` run and SSE endpoints |
 | Observability | Structured execution traces and injectable event tracing |
 
 Gabby’s controls are not all enabled by default. Skill signing is optional, sandboxing requires explicit configuration, and host-provided tool handlers are trusted code unless a sandboxed implementation is supplied. Engine, operating-system, provider, and deployment behavior must be verified for the target environment. See the [threat model](docs/THREAT_MODEL.md), [scaling and operational tradeoffs](docs/SCALING_AND_OPERATIONS.md), and [current limitations](docs/PROJECT_SCORECARD.md).

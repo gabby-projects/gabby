@@ -1,6 +1,6 @@
 # ADR 0075: Bounded EPUB chapter ingestion
 
-- Status: Accepted under the architect's delegated implementation authority
+- Status: Superseded by ADR 0125
 - Date: 2026-10-02
 
 ## Context

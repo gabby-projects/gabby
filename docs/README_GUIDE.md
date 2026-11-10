@@ -8,7 +8,7 @@ This guide explains how to use Gabby's agent runtime and governance capabilities
 uv sync --frozen --group dev --extra server --extra auth
 ```
 
-Use `uv run` for project commands so the locked virtual environment is selected consistently. The `server` extra installs Uvicorn for `gabby serve`; the `mcp` extra enables `gabby mcp`; embedded users can install the core package without either server process.
+Use `uv run` for project commands so the locked virtual environment is selected consistently. The `server` extra installs Uvicorn for `gabby serve`; embedded users can install the core package without the server process.
 
 When the alpha package is published, install this pre-release explicitly with
 `python -m pip install --pre gabby-agent-runtime`. Pip excludes pre-release versions from ordinary
@@ -21,7 +21,7 @@ name: coding-helper
 description: Helps with code questions using an explicitly supplied environment.
 
 model:
-  provider: openai_compatible # or ollama, huggingface, anthropic, gemini, transformers
+  provider: openai_compatible # or ollama, huggingface, anthropic, gemini
   model: your-model-name      # for example qwen3:8b with Ollama
   # base_url: https://api.example.com/v1
   # api_key_env: MODEL_API_KEY
@@ -89,29 +89,6 @@ turns, and supports SSE text streaming. It uses the configured HTTPS `model.base
 to `https://generativelanguage.googleapis.com/v1beta`. See the official
 [Gemini GenerateContent guide](https://ai.google.dev/gemini-api/docs/generate-content) and
 [function calling guide](https://ai.google.dev/gemini-api/docs/generate-content/function-calling).
-
-For local Hugging Face Transformers inference, install `gabby-agent-runtime[transformers]` and a
-PyTorch 2.5+ build selected for your CPU/GPU platform. Set `provider: transformers`; model weights are
-loaded lazily on first execution. The default device is CPU. Configure `revision` to pin a Hub
-commit, `local_files_only: true` to prohibit model downloads, and `max_input_tokens` /
-`max_new_tokens` to bound each prompt and generation. Gabby disables custom model code and accepts
-only safetensors weights. Models need a Transformers chat template; agents with tools also need a
-compatible structured response parser. HTTP SSE streams local token deltas when no tools are
-available for that model call. When tools are available, Gabby buffers the response and uses the
-configured model-specific parser so tool-control tokens are not exposed as user-facing text. Install
-PyTorch using the
-[official platform selector](https://pytorch.org/get-started/locally/) because CPU, CUDA, and other
-accelerator builds differ.
-
-```yaml
-model:
-  provider: transformers
-  model: HuggingFaceTB/SmolLM3-3B
-  revision: <commit-sha>
-  device: cpu
-  max_input_tokens: 16384
-  max_new_tokens: 1024
-```
 
 Opt-in live completion and streaming acceptance checks for Ollama and Hugging Face are documented
 in [`tests/integration/README.md`](../tests/integration/README.md). They use credentials from the host
@@ -651,7 +628,7 @@ prompt instead of silently truncating them. This caps Gabby's prompt assembly, b
 memory already allocated inside a custom retriever before it returns.
 
 The SQLite store uses FTS5 BM25 ranking, exact metadata filters, stable document IDs, and
-source-scoped replacement. Markdown, plain-text, YAML, TOML, HTML, and JSON files can be ingested with deterministic
+source-scoped replacement. Markdown and plain-text files can be ingested with deterministic
 paragraph chunks (2,000 characters per base chunk and a 160-character overlap by default). Each
 file is a source and is atomically replaced when reingested. Each database operation runs off the
 event loop and uses its own short-lived connection. File discovery, path checks, and reads also run
@@ -667,166 +644,19 @@ await ingestor.ingest_directory(metadata={"collection": "product-docs"})
 agent = Agent.from_file("agent.yaml", retriever=knowledge)
 ```
 
-For shared lexical knowledge across service workers, `PostgresKnowledgeStore` uses a host-owned
-async PostgreSQL pool. Apply `sql/postgres_knowledge.sql` with the application's migration system,
-then inject the store into `FileIngestor` and the agent. The optional `postgres` extra supplies
-asyncpg; Gabby does not own or close the pool:
+`FileIngestor` handles UTF-8 `.txt`, `.log`, `.md`, and `.markdown` files below an explicit root.
+Markdown is indexed as source text with its markup preserved. Inputs, extracted text, directory file
+count, and total directory bytes are bounded. Each source is replaced atomically when reingested;
+parsers and the paragraph chunker are replaceable. The default parser set stays deliberately small;
+hosts can inject a trusted `FileParser` for formats they need, and should isolate complex parsers
+when processing untrusted files. `TextFileIngestor` remains an alias of `FileIngestor`.
 
-```python
-from gabby import Agent, FileIngestor, PostgresKnowledgeStore
+`FileParser` receives file bytes and returns ordered `ParsedPage` values. `FileIngestor` owns
+root-confined paths, byte and output limits, chunking, metadata, and source replacement. It does not
+include PDF, OCR, office-document, email, archive, or structured-data parsers.
+See [ADR 0125](architecture/adr/0125-plain-text-markdown-ingestion.md) for the scope decision.
 
-knowledge = PostgresKnowledgeStore(host_owned_asyncpg_pool)
-await FileIngestor(knowledge, root="./docs").ingest_directory()
-agent = Agent.from_file("agent.yaml", retriever=knowledge)
-```
-
-This backend provides PostgreSQL full-text retrieval, exact JSON metadata filters, and generation
-staging with fencing. For multi-instance hybrid indexing, pair it with a shared generation-aware
-vector store and `PostgresGenerationManifestStore`; all three must use the same manifest generation
-contract.
-
-`FileIngestor` accepts UTF-8 `.md`, `.markdown`, `.txt`, `.log`, `.adoc`, `.asciidoc`, `.rst`, `.yaml`, `.yml`, `.toml`, `.eml`, `.mbox`, `.ics`, `.vcf`, `.rss`, `.atom`, `.html`, `.htm`, `.json`, `.jsonl`,
-`.ipynb`, `.xml`, `.opml`, `.csv`, `.rtf`, `.docx`, `.pptx`, `.odp`, `.epub`, `.odt`, `.ods`, and `.xlsx` files below its configured root, plus
-optional `.parquet` with `gabby-agent-runtime[parquet]`, `.pdf`, and raster image OCR.
-`MarkupTextParser` indexes reStructuredText (`.rst`) and AsciiDoc (`.adoc`, `.asciidoc`) as bounded
-UTF-8 source, preserving markup for retrieval. It never evaluates directives or follows include
-paths; limits default to 10 MiB input and 10 million extracted characters.
-`ICalendarTextParser` indexes each `VEVENT`, `VTODO`, and `VJOURNAL` as a separate cited page in source order,
-unfolds folded lines, decodes RFC 5545 text escapes, and exposes type-specific identifiers and
-selected fields as filterable metadata. Task pages include due/completed times, status, and priority
-when present; journal pages include summary, start, description, status, and UID when present.
-Nested alarms and other subcomponents are excluded. The parser requires valid UTF-8 and balanced
-calendar components, and defaults to 10 MiB input, 1,000 events, 1,000 tasks, 1,000 journals,
-1,000 attendees per record, 100,000 content lines, and 10 million extracted characters.
-`VCardTextParser` indexes `.vcf` files as one cited page per contact, supporting UTF-8 vCard
-2.1, 3.0, and 4.0 records with folded lines and escaped text. Names, organizations, email addresses,
-telephone numbers, URLs, and other selected fields are searchable; selected identifiers and contact
-fields are also available as exact metadata filters. It does not fetch URLs or decode quoted-printable
-values. Input defaults to 10 MiB, 1,000 cards, 100,000 lines, 1,000 properties per card, and 10
-million extracted characters.
-`RSSAtomTextParser` indexes RSS 1.0/2.0 and Atom feed entries as individual cited pages from `.rss`
-and `.atom` files; `.xml` files with RSS, RDF, or Atom roots are detected by `XMLTextParser` too.
-`OPMLTextParser` indexes nested `.opml` subscription and outline entries with category paths and
-safe URL metadata; `.xml` files with an OPML root are detected by `XMLTextParser` too.
-`JSONTextParser` detects JSON Feed 1.0/1.1 in `.json` files and indexes each item as a cited page;
-ordinary JSON files continue to preserve their source text. Feed links are citations only and are
-never fetched.
-Entry titles, links, dates, authors, and categories become searchable text or filterable metadata;
-HTML summaries are reduced to visible text, and only absolute HTTP(S) links without embedded
-credentials are retained as citations. The parser does not fetch feeds or follow entry links.
-It rejects DTDs and entity declarations and bounds input, output, item count, XML depth, elements,
-attributes, and categories.
-`MboxTextParser` indexes separator-framed `.mbox` archives as one cited page per message and
-reuses `EmailTextParser` so MIME attachments stay excluded. It requires a valid `From ` envelope
-before each message, does not fetch content, and bounds total input, line count, message count,
-aggregate output, MIME parts, and MIME nesting. Content-Length-framed mbox variants are rejected;
-separator-framed archives should escape body lines beginning with `From ` according to mbox rules.
-`EmailTextParser` indexes selected message headers and text bodies, skips attachments, and prefers
-plain text over duplicate HTML alternatives. For HTML-only messages it extracts visible text. It
-indexes From, To, Cc, Date, Subject, and Message-ID headers, and bounds input to 10 MiB, MIME parts
-to 1,000, nesting to 32 levels, and output to 10 million characters by default. `HTMLTextParser`
-preserves the title, headings, paragraphs, and list boundaries,
-and omits script, style, template, SVG, and hidden subtrees. `JSONTextParser` validates strict JSON,
-rejects duplicate object keys and excessive nesting or token counts, and preserves the source text
-for retrieval. `YAMLTextParser` renders bounded `.yaml` and `.yml` documents as searchable dotted
-key paths and list indexes, rejecting duplicate keys, alias cycles, merge keys, unsafe tags, multiple
-documents, and excessive structure or output. `TOMLTextParser` renders bounded `.toml` documents as
-searchable dotted key paths and list indexes, normalizes TOML dates and times to ISO-8601 strings,
-and rejects malformed input, excessive structure, and oversized output. `JSONLinesTextParser` validates
-one strict JSON value on each non-blank line, retains physical line numbers in the indexed text, and
-caps records, record bytes, and total rendered bytes.
-It uses the same depth and token checks as `JSONTextParser`. `CSVTextParser` expects a header row, rejects duplicate headers and inconsistent
-records, and renders bounded rows as labeled fields so retrieval keeps each value tied to its column.
-`ParquetTextParser` is available with `pip install 'gabby-agent-runtime[parquet]'`. It reads flat
-Parquet tables in bounded batches, renders field-labeled rows with row-range citations, and applies
-limits to input, row and column counts, row groups, aggregate uncompressed data, cell and row size,
-page count, and total rendered output. Nested and binary columns are rejected so results stay predictable
-and searchable; flatten those fields before ingestion when needed.
-`NotebookTextParser` validates the required Jupyter notebook v4 structure (including v4.5+ cell IDs),
-indexes source in cell order with one-based cell citations, and excludes cell outputs and execution
-metadata. It bounds input, cell count, source bytes per cell, total rendered output, JSON depth, and
-tokens. In `FileIngestor`, its cell limit follows the configured `max_pages` limit. It uses no
-notebook dependency and never executes notebook code. See the
-[Jupyter notebook format specification](https://nbformat.readthedocs.io/en/latest/format_description.html).
-It defaults to 100,000 rows, 1,000 columns, and 10 MiB of rendered text; JSON defaults to depth 64 and
-200,000 tokens. `XMLTextParser` streams UTF-8 XML into path-labeled text and attributes without
-requiring another package. It rejects DTD/entity declarations and bounds input/output bytes, nesting,
-elements, and attributes. Defaults are 10 MiB input, 12 MiB rendered output, 250,000 elements,
-depth 128, and 256 attributes per element. `DOCXTextParser` reads paragraph and table text in document order with tabs and line
-breaks preserved. `RTFTextParser` extracts visible text, Unicode escapes, paragraph breaks, and tabs;
-it skips known non-body destinations, hidden text, and bounded binary payloads. It uses the standard
-library and defaults to 10 MiB input, 128 nested groups, 1 million control words, and 10 million
-extracted characters. It does not render layout, images, or embedded objects. See the
-[Microsoft RTF 1.9.1 specification](https://interoperability.blob.core.windows.net/files/Archive_References/%5BMSFT-RTF%5D.pdf).
-`DOCXTextParser` reads paragraph and table text in document order with tabs and line breaks
-preserved. It requires no additional package, extracts no images or deleted revision text,
-and has no page attribution. `PPTXTextParser` reads slide text in presentation order and assigns
-one-based slide numbers as `page_number` citations; it does not extract notes, images, or chart data.
-Its defaults cap the archive at 10 MiB, uncompressed content at 32 MiB, each slide XML part at 4 MiB,
-slides at 100, and extracted text at 10 million characters. `ODPTextParser` reads OpenDocument
-Presentation slide paragraphs and headings in source order, assigning slide-number citations and
-retaining slide names as filterable metadata. It uses no additional package and rejects encrypted
-archives, unsafe or duplicate paths, DTD/entity declarations, and oversized content; defaults cap the
-archive at 10 MiB, expanded content at 32 MiB, content XML at 16 MiB, XML elements at 250,000,
-slides at 100, and extracted text at 10 million characters. Notes, images, charts, and embedded
-media are not extracted. Both OpenXML parsers reject encrypted archives, unsafe or duplicate entry
-names, DTD/entity declarations, and inputs over their limits.
-DOCX defaults cap archives at 10 MiB, uncompressed content at 32 MiB,
-package metadata XML at 1 MiB per part, and document XML at 16 MiB,
-250,000 XML elements, 100,000 paragraphs, and 10 million extracted characters. `EPUBTextParser`
-reads visible HTML/XHTML chapters in OPF spine order and assigns one-based chapter-order citations
-as `page_number`. It uses no extra package, rejects unsafe archive paths and remote spine references,
-and caps the archive at 10 MiB, expanded content at 32 MiB, metadata parts at 1 MiB, chapters at
-4 MiB each, chapter count at 1,000, and extracted text at 10 million characters. It does not
-extract images, stylesheets, or embedded media. `ODTTextParser` reads OpenDocument Text headings,
-paragraphs, tables, tabs, line breaks, and repeated spaces in document order. It uses no extra package,
-rejects encrypted archives, unsafe or duplicate paths, DTD/entities, and oversized content; defaults
-cap the archive at 10 MiB, expanded content at 32 MiB, content XML at 16 MiB, XML elements at
-250,000, paragraphs at 100,000, and extracted text at 10 million characters. `ODSTextParser` renders non-empty cells from each sheet
-in source order as sheet- and row-labeled column values, including bounded repeated rows and
-columns. It rejects encrypted archives, unsafe or duplicate paths, DTD/entities, and oversized
-content; defaults cap the archive at 10 MiB, expanded content at 32 MiB, content XML at 16 MiB,
-XML elements at 250,000, rows at 100,000, columns at 1,000, cells at 1 million, sheets at 1,000,
-and extracted text at 10 million characters. It does not recalculate formulas or extract embedded
-media. `XLSXTextParser` follows workbook sheet order, resolves bounded worksheet/shared-string parts,
-and renders cached or inline values with sheet, row, and column labels. It rejects external or unsafe
-relationships, encrypted archives, duplicate paths, DTD/entities, malformed XML, and oversized
-input. Defaults cap the archive at 10 MiB, expanded content at 32 MiB, worksheet XML at 4 MiB per
-sheet, shared-string XML at 16 MiB, sheets at 1,000, rows at 100,000, columns at 1,000, cells and
-shared strings at 1 million, and extracted text at 10 million characters. Formula values are not
-recalculated. Tune limits by passing custom parsers through
-`FileIngestor(parsers=...)`; that argument replaces the full default parser set.
-Install the optional `ocr` extra (`pip install 'gabby-agent-runtime[ocr]'`) and the Tesseract
-executable to OCR `.bmp`, `.jpeg`, `.jpg`, `.png`, `.tif`, `.tiff`, and `.webp` images. The default
-`TesseractOCRBackend` processes bounded image frames without writing them to disk and records
-one-based page numbers. It defaults to at most 100 frames, 40 million decoded pixels total, and
-30 seconds per frame; extracted text uses the common 10 million character limit. Configure
-`max_ocr_pages`, `max_image_pixels`, and `ocr_timeout_seconds` on `FileIngestor`, or inject an
-`OCRBackend` into `ImageOCRParser` for a different engine. The Python packages are optional; the
-Tesseract executable must also be installed on the host. For image-only PDF pages that contain
-embedded raster scans, install the optional `pdf-ocr` extra and pass
-`pdf_ocr_backend=TesseractOCRBackend(language="eng")` to `FileIngestor`; set `language` to a
-Tesseract language code installed on the host. Gabby OCRs only blank-text pages, using their first
-embedded image or, when none exists, a bounded PDFium rendering of the page. Vector rendering is
-opt-in with OCR and runs at a configurable scale within the existing pixel budget. OCR keeps the
-original PDF page number for citations and applies the configured page, pixel, image-byte, text, and
-Tesseract timeout limits. The `pdf-ocr` extra includes PDFium; the Tesseract executable and language
-data must also be installed on the host. Rendering runs synchronously in process and cannot be
-interrupted by the OCR timeout, so isolate parsing when processing hostile PDFs.
-Install the optional `pdf` extra (`pip install 'gabby-agent-runtime[pdf]'`) to ingest `.pdf` files.
-PDF chunks include one-based `page_number` metadata for citations. OCR is opt-in; without a configured
-backend, image-only PDF pages remain empty. PDF ingestion defaults to at most 1,000 pages, 10 million extracted characters, 4 MiB
-of decoded page-content output per stream, and 32 MiB aggregate page content per PDF. One directory
-import is limited to 10,000 files and 1 GiB total, in addition to the
-10 MiB per-file limit. `max_total_bytes` also applies to a single-file import if configured below
-the per-file limit. Configure `max_files`, `max_total_bytes`, and `max_file_bytes` on the ingestor
-to match the application; also configure `max_pages`, `max_extracted_chars`, and
-`max_content_stream_bytes` and `max_total_content_stream_bytes` for PDF content.
-Directory imports that exceed their file and byte bounds are rejected during preflight before
-indexing begins. Call `delete_file(path)` after removing a file to delete its indexed source. Each
-source replacement is atomic, while a whole directory import is not a single transaction. Parsers
-and the chunker are replaceable. `TextFileIngestor` remains an alias of `FileIngestor` for
-backward compatibility. `KnowledgeStore`, `EmbeddingProvider`, `VectorStore`, and `Reranker` are replaceable
+`KnowledgeStore`, `EmbeddingProvider`, `VectorStore`, and `Reranker` are replaceable
 interfaces. `HybridRetriever` combines any lexical `Retriever` with a host-provided embedding
 provider and vector store using deterministic Reciprocal Rank Fusion (RRF). It embeds a query once,
 fetches both candidate lists concurrently, deduplicates by document ID, and returns the fused top
@@ -931,42 +761,6 @@ await coordinator.replace_source("docs/guide.md", documents)
 results = await coordinator.retrieve("How does authentication work?")
 ```
 
-For multi-worker or multi-host indexing, use the PostgreSQL adapters with one host-owned asyncpg
-pool and a PostgreSQL server where pgvector is installed. Apply the knowledge, vector, and generation
-manifest migrations through the application's migration system. Keep all three tables in the same
-PostgreSQL consistency domain:
-
-```python
-from gabby import (
-    HybridIndexCoordinator,
-    PostgresGenerationManifestStore,
-    PostgresKnowledgeStore,
-    PostgresVectorStore,
-)
-
-coordinator = HybridIndexCoordinator(
-    lexical=PostgresKnowledgeStore(pool),
-    embeddings=embedding_provider,
-    vectors=PostgresVectorStore(pool, dimensions=1536),
-    manifest=PostgresGenerationManifestStore(pool),
-)
-await coordinator.replace_source("docs/guide.md", documents)
-```
-
-`PostgresVectorStore` uses pgvector's HNSW cosine index and persists the configured embedding
-dimension, so every worker must use the same embedding model and dimensions for that index. Its
-HNSW configuration supports 1–2,000 dimensions. It enables strict-order iterative scans for filtered
-retrieval and exposes bounded `ef_search` and `max_scan_tuples` controls. Install pgvector 0.8.0 or
-newer to support iterative scans. The host owns pgvector installation, the pool, credentials,
-backups, and migrations.
-
-For a multi-instance deployment, install `gabby[postgres]`, inject a host-owned asyncpg pool, and
-use `PostgresGenerationManifestStore`. Apply Gabby's SQL migration through your normal migration
-system. The manifest provides shared lease and activation coordination; each service still needs
-shared lexical and vector stores that honor the generation fencing contract. See the
-[extension guide](../docs/EXTENSIONS.md#hybrid-index-generation-contract) for ownership and consistency
-requirements.
-
 For Hugging Face Inference Providers, use `HuggingFaceFeatureExtractionProvider`; it reads
 `HF_TOKEN` from the host environment by default and supports bounded batches, model-specific
 truncation options, and mean or CLS pooling for token-level feature output:
@@ -982,30 +776,6 @@ await embeddings.aclose()
 The selected model and inference provider receive indexed text. Select pooling and prompt options
 according to the model documentation. Gabby does not bundle weights or choose an embedding model.
 
-For local semantic retrieval, `TransformersEmbeddingProvider` loads an encoder model through the
-optional `transformers` extra and the host-selected PyTorch build. It uses attention-mask-aware mean
-pooling by default, supports CLS pooling, normalizes vectors for cosine search, and keeps inference
-off the event loop. It does not apply model-specific retrieval prompts or Sentence Transformers
-modules; use a custom `EmbeddingProvider` when a model requires those. Pin `revision` for reproducible
-deployments, and use `local_files_only=True` when the model must already be present in the local
-cache:
-
-```python
-from gabby import TransformersEmbeddingProvider
-
-embeddings = TransformersEmbeddingProvider(
-    model_id="sentence-transformers/all-MiniLM-L6-v2",
-    revision="<model-commit-sha>",
-    local_files_only=True,
-    device="cpu",
-)
-vectors = await embeddings.embed(["How does authentication work?"])
-await embeddings.aclose()
-```
-
-The provider caps input at 4 MiB, defaults to 512 tokens per text and batches of 16, caps an
-eight-bytes-per-value vector output estimate at 4 MiB by default, and applies a 120-second timeout.
-These limits can be configured on the provider.
 Use the same embedding model and pooling settings for indexing and queries. Rebuild the vector index
 when changing models or pooling because equal vector dimensions do not imply compatible embedding
 spaces.
@@ -1043,7 +813,6 @@ gabby knowledge search "installation requirements" --database ./.gabby/knowledge
 gabby knowledge evaluate --dataset ./retrieval.jsonl --database ./.gabby/knowledge.db
 gabby embeddings evaluate --dataset ./embedding.jsonl --provider-config ./embedding-provider.json
 gabby run ./agent.yaml "Summarize this task" --knowledge-db ./.gabby/knowledge.db
-gabby mcp ./agent.yaml --knowledge-db ./.gabby/knowledge.db
 gabby evaluate ./agent.yaml --dataset ./evaluation.jsonl
 mkdir -p ./dist
 gabby skill pack ./skills/debugging --output ./dist/debugging.gabskill
@@ -1153,7 +922,7 @@ print(report.mean_ndcg, report.mean_pairwise_accuracy)
 ```
 
 For repeatable CLI runs, `gabby embeddings evaluate` accepts a versioned JSON provider profile. It
-supports `openai_compatible`, `gemini`, `huggingface`, and optional local `transformers` providers; credentials
+supports `openai_compatible`, `gemini`, and `huggingface` providers; credentials
 must come from the provider's configured host environment variable. The profile is limited to 64
 KiB, rejects duplicate or unknown keys, and cannot contain inline API keys.
 
@@ -1229,11 +998,8 @@ after its session expires. Providers with a `stream()` method stream model delta
 fall back to one text delta after completion.
 
 For same-host process sharing or restart replay, configure `stream_journal_path` with a local SQLite
-file. For multiple hosts, install `gabby-agent-runtime[postgres]`, apply
-`sql/postgres_stream_journal.sql` through your migration system, then inject
-`PostgresStreamJournal(pool)` using `create_app(stream_journal=...)` or `serve(stream_journal=...)`.
-The migration is also packaged at `gabby/sql/postgres_stream_journal.sql` for installed consumers.
-Gabby does not own or close the host's PostgreSQL pool.
+file. Other storage backends can implement the `StreamJournal` contract; the host owns their
+consistency and lifecycle.
 
 ```sh
 curl -N http://127.0.0.1:8787/v1/agents/coding-agent/stream \

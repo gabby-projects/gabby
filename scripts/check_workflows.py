@@ -49,25 +49,6 @@ def main() -> int:
     ci_path = workflow_dir / "ci.yml"
     if ci_path.is_file():
         ci = ci_path.read_text(encoding="utf-8")
-        postgres_workflow = workflow_dir / "postgres-validation.yml"
-        if not postgres_workflow.is_file():
-            failures.append("CI is missing the reusable PostgreSQL acceptance workflow.")
-        else:
-            postgres_checks = postgres_workflow.read_text(encoding="utf-8")
-            for required in (
-                "workflow_call:",
-                "image: postgres:17-alpine",
-                "GABBY_POSTGRES_DSN:",
-                "tests/integration/test_postgres_indexing_live.py",
-                "tests/integration/test_postgres_knowledge_live.py",
-                "tests/integration/test_postgres_stream_journal_live.py",
-                "image: pgvector/pgvector:0.8.6-pg17-trixie",
-                "tests/integration/test_postgres_vector_live.py",
-            ):
-                if required not in postgres_checks:
-                    failures.append(f"PostgreSQL acceptance workflow must include {required!r}.")
-        if "uses: ./.github/workflows/postgres-validation.yml" not in ci:
-            failures.append("CI must call the reusable PostgreSQL acceptance workflow.")
         ci_platform = ci.partition("  platform:\n")[2].partition("  quality:\n")[0]
         for version in ("3.11", "3.12", "3.13", "3.14"):
             if f'"{version}"' not in ci:
@@ -147,8 +128,6 @@ def main() -> int:
             failures.append(
                 "CI platform job must install optional server and JWT auth dependencies."
             )
-        if "--extra mcp" not in ci_platform:
-            failures.append("CI platform job must test the optional MCP adapter.")
         if (
             "if: runner.os == 'Windows'" not in ci_platform
             or "--extra windows-sandbox" not in ci_platform
@@ -163,10 +142,6 @@ def main() -> int:
             )
         if "--extra windows-sandbox" not in ci_quality:
             failures.append("CI quality job must audit optional Windows sandbox dependencies.")
-        if "--extra transformers" not in ci_quality:
-            failures.append("CI quality job must audit the optional Transformers provider.")
-        if "--extra mcp" not in ci_quality:
-            failures.append("CI quality job must audit the optional MCP adapter.")
         for command in (
             "ruff check src tests scripts examples",
             "ruff format --check src tests scripts examples",
@@ -185,16 +160,8 @@ def main() -> int:
         release = release_path.read_text(encoding="utf-8")
         if 'tags: ["v*"]' not in release:
             failures.append("Release workflow must run only for v-prefixed version tags.")
-        if (
-            "  build:\n    needs: [platform, quality, sandbox-live, deployment-container, "
-            "postgres-live]" not in release
-        ):
-            failures.append(
-                "Release distribution build must wait for platform, quality, sandbox, container, "
-                "and PostgreSQL acceptance gates."
-            )
-        if "uses: ./.github/workflows/postgres-validation.yml" not in release:
-            failures.append("Release workflow must run PostgreSQL acceptance before publishing.")
+        if "  build:\n    needs: [platform, quality, sandbox-live, deployment-container]" not in release:
+            failures.append("Release distribution build must wait for platform, quality, sandbox, and container gates.")
         release_deployment = release.partition("  deployment-container:\n")[2].partition(
             "  quality:\n"
         )[0]
@@ -277,8 +244,6 @@ def main() -> int:
             failures.append(
                 "Release platform job must install optional server and JWT auth dependencies."
             )
-        if "--extra mcp" not in release_platform:
-            failures.append("Release platform job must test the optional MCP adapter.")
         if (
             "if: runner.os == 'Windows'" not in release_platform
             or "--extra windows-sandbox" not in release_platform
@@ -293,10 +258,6 @@ def main() -> int:
             )
         if "--extra windows-sandbox" not in release_quality:
             failures.append("Release quality job must audit optional Windows sandbox dependencies.")
-        if "--extra transformers" not in release_quality:
-            failures.append("Release quality job must audit the optional Transformers provider.")
-        if "--extra mcp" not in release_quality:
-            failures.append("Release quality job must audit the optional MCP adapter.")
         release_sandbox = release.partition("  sandbox-live:\n")[2].partition("  quality:\n")[0]
         for required in (
             "runs-on: ubuntu-24.04",
@@ -355,7 +316,7 @@ def main() -> int:
     print(
         "Workflow actions are pinned; CI and release platform gates cover Python 3.11–3.14 "
         "on Linux/macOS/Windows with Linux Docker/Podman sandbox acceptance, plus reusable "
-        "PostgreSQL, Compose, and Nginx ingress gates in CI and tagged releases; "
+        "Compose and Nginx ingress gates in CI and tagged releases; "
         "tagged PyPI publication is gated by verification and a protected environment."
     )
     return 0

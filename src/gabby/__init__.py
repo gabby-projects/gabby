@@ -29,7 +29,6 @@ documentation before depending on an extension interface.
 
 from .agent import Agent
 from .approval import ApprovalAuditSink, ApprovalDecision, ApprovalHandler, ApprovalRequest
-from .approval_postgres import AsyncPostgresExecutor, PostgresApprovalAudit
 from .approval_sqlite import (
     ApprovalAuditError,
     ApprovalAuditRecord,
@@ -93,47 +92,15 @@ from .indexing import (
     SQLiteGenerationManifestStore,
 )
 from .ingestion import (
-    CSVTextParser,
-    DOCXTextParser,
-    EmailTextParser,
-    EPUBTextParser,
     FileIngestor,
     FileParser,
-    HTMLTextParser,
-    ICalendarTextParser,
-    ImageOCRParser,
     IngestionReport,
-    JSONLinesTextParser,
-    JSONTextParser,
     MarkupTextParser,
-    MboxTextParser,
-    NotebookTextParser,
-    OCRBackend,
-    OCRPageResult,
-    ODPTextParser,
-    ODSTextParser,
-    ODTTextParser,
-    OPMLTextParser,
     ParagraphChunker,
-    ParquetTextParser,
     ParsedPage,
-    PDFiumPageRenderer,
-    PDFPageRenderer,
-    PDFPageRenderSession,
-    PDFRenderedPage,
-    PDFTextParser,
-    PPTXTextParser,
-    RSSAtomTextParser,
-    RTFTextParser,
-    TesseractOCRBackend,
     TextChunker,
     TextFileIngestor,
-    TOMLTextParser,
     Utf8TextParser,
-    VCardTextParser,
-    XLSXTextParser,
-    XMLTextParser,
-    YAMLTextParser,
 )
 from .knowledge import (
     ActiveGenerationReader,
@@ -151,8 +118,6 @@ from .knowledge import (
     SQLiteFTS5Store,
     VectorStore,
 )
-from .mcp_adapter import create_mcp_server
-from .mcp_tools import register_mcp_tools
 from .models import (
     AnthropicProvider,
     GeminiProvider,
@@ -166,7 +131,6 @@ from .models import (
     OpenAICompatibleProvider,
     RetryableModelError,
     StreamingModelProvider,
-    TransformersProvider,
     ensure_model_request_size,
     ensure_model_response_size,
 )
@@ -179,10 +143,6 @@ from .planning import (
     PlanningResult,
     PlanStep,
 )
-from .postgres_indexing import AsyncPostgresPool, PostgresGenerationManifestStore
-from .postgres_knowledge import PostgresKnowledgeStore
-from .postgres_stream_journal import PostgresStreamJournal
-from .postgres_vector import PostgresVectorStore
 from .python_tools import python_run_tool
 from .redis_skill_revocation import AsyncRedisCommands, RedisSkillRevocationStore
 from .rerankers import (
@@ -191,7 +151,6 @@ from .rerankers import (
     NvidiaReranker,
     RerankingError,
     RerankingResponseSizeError,
-    TransformersReranker,
     VoyageReranker,
 )
 from .retrieval_evaluation import (
@@ -268,7 +227,6 @@ from .tools import (
     ToolRegistry,
 )
 from .tracing import ExecutionTrace, TraceEvent, Tracer
-from .transformers_embeddings import TransformersEmbeddingProvider
 from .vector import SQLiteVectorStore
 from .verification import VerificationResult, Verifier
 
@@ -278,20 +236,17 @@ __all__ = [
     "GabbyClient",
     "RunResult",
     "StreamEvent",
-    "CSVTextParser",
     "AgentDefinition",
     "AgentTool",
     "AnthropicProvider",
     "ApprovalDecision",
     "ApprovalAuditSink",
-    "AsyncPostgresExecutor",
     "ApprovalHandler",
     "ApprovalRequest",
     "ApprovalAuditError",
     "ApprovalAuditRecord",
     "AuditedApprovalHandler",
     "SQLiteApprovalAudit",
-    "PostgresApprovalAudit",
     "AgentStreamEvent",
     "Authenticator",
     "AuthenticationUnavailable",
@@ -299,7 +254,6 @@ __all__ = [
     "CohereReranker",
     "JinaReranker",
     "NvidiaReranker",
-    "TransformersReranker",
     "VoyageReranker",
     "JWTBearerAuthenticator",
     "TokenRevocationChecker",
@@ -334,20 +288,7 @@ __all__ = [
     "ExecutionTrace",
     "FileIngestor",
     "FileParser",
-    "DOCXTextParser",
-    "EPUBTextParser",
-    "EmailTextParser",
-    "HTMLTextParser",
-    "ICalendarTextParser",
-    "ImageOCRParser",
-    "JSONLinesTextParser",
-    "JSONTextParser",
     "MarkupTextParser",
-    "MboxTextParser",
-    "NotebookTextParser",
-    "OPMLTextParser",
-    "XMLTextParser",
-    "YAMLTextParser",
     "ModelProvider",
     "ModelRequestSizeError",
     "ModelResponseSizeError",
@@ -373,22 +314,8 @@ __all__ = [
     "OpenAICompatibleProvider",
     "RetryableModelError",
     "ParagraphChunker",
-    "ParquetTextParser",
     "ParsedPage",
-    "PDFPageRenderer",
-    "PDFPageRenderSession",
-    "PDFRenderedPage",
-    "PDFiumPageRenderer",
-    "PDFTextParser",
-    "PPTXTextParser",
-    "RSSAtomTextParser",
-    "RTFTextParser",
     "PlanStep",
-    "AsyncPostgresPool",
-    "PostgresGenerationManifestStore",
-    "PostgresKnowledgeStore",
-    "PostgresStreamJournal",
-    "PostgresVectorStore",
     "Planner",
     "PlanningCapability",
     "PlanningObservation",
@@ -397,18 +324,10 @@ __all__ = [
     "PendingIndexGeneration",
     "TextChunker",
     "TextFileIngestor",
-    "TesseractOCRBackend",
-    "TOMLTextParser",
     "IngestionReport",
     "InMemoryBM25Retriever",
     "KnowledgeStore",
     "KnowledgeStoreError",
-    "OCRBackend",
-    "OCRPageResult",
-    "ODPTextParser",
-    "ODTTextParser",
-    "ODSTextParser",
-    "XLSXTextParser",
     "Principal",
     "PolicyEngine",
     "PolicyEngineFactory",
@@ -441,8 +360,6 @@ __all__ = [
     "SandboxTimeout",
     "SandboxUnavailable",
     "StreamingModelProvider",
-    "TransformersProvider",
-    "TransformersEmbeddingProvider",
     "SQLiteFTS5Store",
     "SQLiteVectorStore",
     "SQLiteGenerationManifestStore",
@@ -456,7 +373,6 @@ __all__ = [
     "ToolErrorCode",
     "ToolRegistry",
     "Utf8TextParser",
-    "VCardTextParser",
     "TraceEvent",
     "Tracer",
     "VectorStore",
@@ -484,8 +400,6 @@ __all__ = [
     "pack_skill",
     "sign_skill_package",
     "verify_skill_package_signature",
-    "create_mcp_server",
-    "register_mcp_tools",
     "create_app",
     "ensure_model_request_size",
     "ensure_model_response_size",

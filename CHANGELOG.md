@@ -5,17 +5,16 @@ User-visible changes are recorded here. Before the first release, entries are gr
 
 ## Unreleased
 
-- Removed the local `gabby train` model-weight training workflow. Agent behavior is configured with
-  instructions, skills, policies, tools, knowledge, and runtime pipelines. Model adapter loading was
-  also removed from the local Transformers provider.
-- Added bounded token streaming for tool-free local Transformers generations; tool-enabled
-  generations retain buffered, model-specific tool-call parsing. Synchronous tool-pool saturation
-  now reports the stable `capacity_exhausted` error code.
-- Added opt-in live completion and streaming acceptance coverage for the native Gemini provider.
-- Extended the opt-in local Transformers acceptance check to cover incremental SSE text.
-- Added a scaling and operations guide documenting bounded synchronous callback capacity, vector
-  backend choices, multi-host hybrid indexing, local Transformers streaming boundaries, Windows
-  engine requirements, and safe schema prototyping.
+- Removed Gabby's local Transformers model, embedding, and reranking loaders. Model execution now
+  uses host-injected or hosted providers; RAG remains available through host-selected retrieval,
+  embedding, and vector-store contracts.
+- Limited built-in knowledge ingestion to bounded UTF-8 plain text, logs, and Markdown. Hosts can
+  inject parsers for other formats; removed bundled structured-file, office, PDF, and OCR parsers.
+- Retained bounded synchronous tool-pool capacity errors and opt-in live completion and streaming
+  acceptance for hosted model providers.
+- Removed the built-in PostgreSQL stores and journals, MCP adapters, and OpenTelemetry exporter.
+  SQLite remains the built-in persistence option; hosts may implement Gabby's storage and tracing
+  interfaces for their own infrastructure.
 
 ## 0.1.0a1 — 2026-10-10
 

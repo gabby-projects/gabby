@@ -11,11 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Opt-in acceptance checks against configured hosted and local model providers."""
+"""Opt-in acceptance checks against configured hosted model providers."""
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Any
 
@@ -23,7 +22,6 @@ import pytest
 
 from gabby.agent import Agent
 from gabby.config import AgentDefinition
-from gabby.models import TransformersProvider
 
 
 @pytest.mark.integration
@@ -94,108 +92,3 @@ async def test_live_model_provider_completion_and_stream(
         assert isinstance(output, str) and output.strip(), "stream completion output was empty"
     finally:
         await agent.aclose()
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_live_local_transformers_model_completion() -> None:
-    run_flag = "GABBY_RUN_TRANSFORMERS_INTEGRATION"
-    model_env = "GABBY_TRANSFORMERS_MODEL"
-    if os.environ.get(run_flag) != "1":
-        pytest.skip(f"set {run_flag}=1 to load a local Transformers model")
-    model_id = os.environ.get(model_env)
-    if not model_id:
-        pytest.fail(f"set {model_env} to a local path or Hugging Face model ID")
-
-    model: dict[str, Any] = {
-        "provider": "transformers",
-        "model": model_id,
-        "device": os.environ.get("GABBY_TRANSFORMERS_DEVICE", "cpu"),
-        "local_files_only": os.environ.get("GABBY_TRANSFORMERS_LOCAL_FILES_ONLY", "1") != "0",
-        "max_input_tokens": 16384,
-        "max_new_tokens": 128,
-    }
-    if revision := os.environ.get("GABBY_TRANSFORMERS_REVISION"):
-        model["revision"] = revision
-    definition = AgentDefinition(
-        name="transformers-acceptance",
-        model=model,
-        instructions="Reply briefly in plain text.",
-        policies={"max_steps": 1, "timeout_seconds": 300},
-    )
-    agent = Agent(definition)
-    try:
-        result = await agent.arun("Reply with a short greeting.")
-        assert result.output.strip(), "local Transformers model returned an empty completion"
-        events = [event async for event in agent.astream("Reply with a short greeting.")]
-        deltas = [
-            event.data.get("text")
-            for event in events
-            if event.type == "text_delta" and isinstance(event.data.get("text"), str)
-        ]
-        assert any(isinstance(delta, str) and delta.strip() for delta in deltas), (
-            "local Transformers stream emitted no incremental text"
-        )
-        assert any(event.type == "completed" for event in events), (
-            "local Transformers stream did not complete"
-        )
-    finally:
-        await agent.aclose()
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_live_local_transformers_structured_tool_call() -> None:
-    run_flag = "GABBY_RUN_TRANSFORMERS_TOOL_INTEGRATION"
-    if os.environ.get(run_flag) != "1":
-        pytest.skip(f"set {run_flag}=1 to verify local Transformers tool calling")
-    model_id = os.environ.get("GABBY_TRANSFORMERS_MODEL")
-    if not model_id:
-        pytest.fail("set GABBY_TRANSFORMERS_MODEL to a local path or Hugging Face model ID")
-
-    model: dict[str, Any] = {
-        "provider": "transformers",
-        "model": model_id,
-        "device": os.environ.get("GABBY_TRANSFORMERS_DEVICE", "cpu"),
-        "local_files_only": os.environ.get("GABBY_TRANSFORMERS_LOCAL_FILES_ONLY", "1") != "0",
-        "max_input_tokens": 16384,
-        "max_new_tokens": 128,
-    }
-    if revision := os.environ.get("GABBY_TRANSFORMERS_REVISION"):
-        model["revision"] = revision
-    if template := os.environ.get("GABBY_TRANSFORMERS_TOOL_RESPONSE_TEMPLATE"):
-        model["tool_response_template"] = json.loads(template)
-
-    provider = TransformersProvider.from_config(model)
-    tool_schema = {
-        "type": "function",
-        "function": {
-            "name": "sum_values",
-            "description": "Add two integers and return their sum.",
-            "parameters": {
-                "type": "object",
-                "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
-                "required": ["a", "b"],
-                "additionalProperties": False,
-            },
-        },
-    }
-    response = await provider.complete(
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You must call the sum_values tool exactly once for arithmetic. "
-                    "Return only the tool call and no other content."
-                ),
-            },
-            {"role": "user", "content": "Calculate 2 + 3."},
-        ],
-        tools=[tool_schema],
-        model=model_id,
-        timeout_seconds=300,
-    )
-    assert len(response.tool_calls) == 1, f"expected one structured tool call: {response!r}"
-    function = response.tool_calls[0]["function"]
-    assert function["name"] == "sum_values"
-    assert json.loads(function["arguments"]) == {"a": 2, "b": 3}

@@ -1,6 +1,6 @@
 # ADR 0088: Bounded Jupyter Notebook ingestion
 
-- Status: Accepted
+- Status: Superseded by ADR 0125
 - Date: 2026-10-03
 
 ## Context

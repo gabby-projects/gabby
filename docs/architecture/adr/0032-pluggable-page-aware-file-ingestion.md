@@ -1,6 +1,6 @@
 # ADR 0032: Pluggable page-aware file ingestion
 
-**Status:** Accepted under the architect's delegated implementation authority.  
+**Status:** Superseded by ADR 0125.
 **Date:** 2026-09-30.
 
 ## Context

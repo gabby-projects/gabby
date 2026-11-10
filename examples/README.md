@@ -36,29 +36,6 @@ This requires a local Docker daemon. Gabby pulls `python:3.14-slim` if needed, d
 network access, executes a deterministic calculation through `python_run_tool()`, and removes the
 container after the run. See the [sandboxed Python tool guide](../docs/PYTHON_TOOL.md).
 
-## OpenTelemetry event export
-
-`opentelemetry_tracer.py` adapts Gabby's async `Tracer` contract to OpenTelemetry. It exports one
-short span per runtime event and correlates spans with `gabby.trace_id`. It uses an explicit
-attribute allowlist; prompts, model output, tool arguments, retrieved text, verifier evidence, and
-arbitrary trace details are not exported. Agent names and the opaque run trace ID are included.
-
-Install the optional API and SDK packages, then configure an exporter in the consuming application.
-The example deliberately leaves SDK setup and shutdown to the host:
-
-```sh
-uv sync --frozen --extra observability
-```
-
-Pass the adapter to `Agent(..., tracer=OpenTelemetryEventTracer())`. Hosts that already configure an
-SDK can inject their named tracer with `OpenTelemetryEventTracer(trace.get_tracer("my-service"))`.
-The adapter does not own or shut down the SDK. Export callbacks remain subject to Gabby's per-event
-tracer timeout, so configure a non-blocking SDK processor for production.
-
-For a local console smoke check, configure `TracerProvider` with `SimpleSpanProcessor(ConsoleSpanExporter())`,
-set it as the global provider, and call `provider.shutdown()` after closing the agent. Production
-services should use a batch processor and their deployment's OTLP or vendor exporter.
-
 Run the offline parent/child composition example with:
 
 ```sh

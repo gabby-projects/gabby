@@ -13,8 +13,6 @@
 # limitations under the License.
 """Top-level names used to construct agents and implement providers."""
 
-from pathlib import Path
-
 import gabby
 
 _V1_CORE_EXPORTS = {
@@ -41,12 +39,10 @@ _V1_CORE_EXPORTS = {
     "Environment",
     "FileParser",
     "ParsedPage",
-    "ICalendarTextParser",
     "python_run_tool",
-    "VCardTextParser",
-    "RSSAtomTextParser",
-    "ParquetTextParser",
     "MarkupTextParser",
+    "Utf8TextParser",
+    "ParagraphChunker",
     "Retriever",
     "KnowledgeStore",
     "EmbeddingProvider",
@@ -59,17 +55,10 @@ _V1_CORE_EXPORTS = {
     "Authenticator",
     "ApprovalHandler",
     "ApprovalAuditSink",
-    "AsyncPostgresExecutor",
     "ApprovalAuditError",
     "ApprovalAuditRecord",
     "AuditedApprovalHandler",
     "SQLiteApprovalAudit",
-    "PostgresApprovalAudit",
-    "AsyncPostgresPool",
-    "PostgresGenerationManifestStore",
-    "PostgresKnowledgeStore",
-    "PostgresStreamJournal",
-    "PostgresVectorStore",
     "NvidiaReranker",
     "EngineAdapter",
     "SkillTrustPolicy",
@@ -80,14 +69,6 @@ _V1_CORE_EXPORTS = {
     "StreamJournal",
     "StreamJournalSnapshot",
 }
-_OPTIONAL_PUBLIC_EXPORTS = {
-    "create_mcp_server",
-    "register_mcp_tools",
-    "AnthropicProvider",
-    "GeminiProvider",
-}
-
-
 def test_v1_core_contracts_are_available_from_package_root() -> None:
     assert set(gabby.__all__) >= _V1_CORE_EXPORTS
     assert all(getattr(gabby, name) is not None for name in _V1_CORE_EXPORTS)
@@ -104,11 +85,6 @@ def test_injectable_policy_engine_contract_is_available_from_package_root() -> N
     assert all(getattr(gabby, name) is not None for name in names)
 
 
-def test_optional_mcp_adapter_is_a_documented_package_root_export() -> None:
-    assert all(getattr(gabby, name) is not None for name in _OPTIONAL_PUBLIC_EXPORTS)
-    compatibility = Path(__file__).resolve().parents[1] / "docs" / "COMPATIBILITY.md"
-    documented = compatibility.read_text(encoding="utf-8")
-    assert all(f"`{name}`" in documented for name in _OPTIONAL_PUBLIC_EXPORTS)
 
 
 def test_v1_core_contracts_are_named_in_the_compatibility_document() -> None:
@@ -147,33 +123,14 @@ def test_agent_definition_skill_and_model_result_are_public_exports() -> None:
         "ToolErrorCode",
         "RetryableModelError",
         "FileIngestor",
-        "CSVTextParser",
-        "ParquetTextParser",
-        "JSONTextParser",
-        "PDFTextParser",
-        "DOCXTextParser",
-        "RTFTextParser",
-        "EPUBTextParser",
-        "ODTTextParser",
-        "ODSTextParser",
-        "XLSXTextParser",
-        "EmailTextParser",
-        "MboxTextParser",
-        "VCardTextParser",
         "EvaluationCase",
         "EvaluationReport",
-        "JSONLinesTextParser",
-        "XMLTextParser",
-        "ImageOCRParser",
-        "OCRBackend",
-        "OCRPageResult",
-        "TesseractOCRBackend",
         "ParsedPage",
+        "MarkupTextParser",
+        "Utf8TextParser",
         "TextFileIngestor",
         "SQLiteVectorStore",
         "OpenAICompatibleEmbeddingProvider",
-        "TransformersEmbeddingProvider",
-        "TransformersReranker",
     ):
         assert name in gabby.__all__
         assert getattr(gabby, name) is not None
