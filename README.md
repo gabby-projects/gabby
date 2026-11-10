@@ -1,8 +1,8 @@
+# Gabby
+
 <div align="center">
 
 <img width="512" height="512" alt="gabby-logo" src="https://github.com/user-attachments/assets/e586a825-3c98-4a33-adec-08aed1263315" />
-
-# Gabby
 
 ### An Agent Runtime and Governance Framework
 
@@ -23,7 +23,7 @@ Gabby helps developers define what an AI agent can do, govern how it uses tools,
 
 Gabby is for developers who need a consistent way to configure agent capabilities, govern tool access, and execute agent work. A host application supplies a request and any context or memory it wants the agent to use. Gabby validates the agent definition, applies its configured runtime contracts, executes model and tool calls within the configured bounds, and returns the output and optional trace. Execution state is temporary; persistence remains with the host by default.
 
-To give an agent a character the user wants, the user defines its instructions and Gabby's AI enforcer applies them within runtime policies and tool boundaries. Gabby does not train models, modify model weights, or load model adapters.
+To give an agent a character the user wants, the user defines its instructions and Gabby's AI enforcer applies them within runtime policies and tool boundaries. A host can use a user-scoped RAG pipeline to supply relevant preferences and reference material to each request. Gabby does not train models, modify model weights, or load model adapters.
 
 Gabby is complementary to agent orchestration frameworks such as LangChain, CrewAI, and IBM BeeAI. Those frameworks help developers compose agents and workflows; Gabby focuses on the runtime boundary for a configured agent: enforcing tool permissions and policies, applying approvals and verification, bounding execution, and returning traceable results. Gabby does not aim to replace an application's orchestration layer. It can serve as the governed execution runtime for an agent or workflow selected and coordinated by the host application.
 
