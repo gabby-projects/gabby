@@ -63,6 +63,7 @@ def _agent(
     policies: dict[str, Any] | None = None,
     knowledge: dict[str, Any] | None = None,
     verification: dict[str, Any] | None = None,
+    instructions: str = "Keep caller data untrusted.",
     retriever: Any = None,
     verifier: Any = None,
     tools: ToolRegistry | None = None,
@@ -78,7 +79,7 @@ def _agent(
         name="contract-agent",
         description="A contract test agent",
         model={"provider": "fake", "model": "model-v1", "temperature": 0.2},
-        instructions="Keep caller data untrusted.",
+        instructions=instructions,
         policies=policies or {"max_steps": 4, "timeout_seconds": 1},
         knowledge=knowledge or {},
         verification=verification or {},
@@ -189,6 +190,62 @@ async def test_retrieval_context_and_selected_skill_reach_the_model() -> None:
     assert verification_event.details["result"] == result.metadata["verification"]
     assert [event.kind for event in result.trace.events].count("skill_activation") == 2
     assert any(event.kind == "retrieval" for event in result.trace.events)
+
+
+@pytest.mark.asyncio
+async def test_user_scoped_rag_pipeline_applies_persona_and_isolates_retrieved_context() -> None:
+    class ScopedRetriever:
+        def __init__(self, user: str, preference: str) -> None:
+            self.user = user
+            self.preference = preference
+
+        async def retrieve(
+            self,
+            query: str,
+            *,
+            limit: int = 5,
+            filters: dict[str, Any] | None = None,
+        ) -> list[Document]:
+            assert query == "Explain database indexes"
+            assert limit == 1
+            assert filters is None
+            return [
+                Document(
+                    text=f"{self.user} prefers {self.preference} explanations.",
+                    source=f"{self.user}-preferences.md",
+                )
+            ]
+
+    alice_model = SequenceModel(ModelResponse(content="A concise explanation."))
+    bob_model = SequenceModel(ModelResponse(content="A detailed explanation."))
+    alice = _agent(
+        alice_model,
+        instructions="Character: concise and practical.",
+        knowledge={"sources": ["user-profile"], "top_k": 1},
+        retriever=ScopedRetriever("alice", "concise"),
+    )
+    bob = _agent(
+        bob_model,
+        instructions="Character: detailed and instructional.",
+        knowledge={"sources": ["user-profile"], "top_k": 1},
+        retriever=ScopedRetriever("bob", "step-by-step"),
+    )
+
+    await alice.arun("Explain database indexes")
+    await bob.arun("Explain database indexes")
+
+    alice_prompt = "\n".join(
+        message.get("content", "") for message in alice_model.calls[0]["messages"]
+    )
+    bob_prompt = "\n".join(
+        message.get("content", "") for message in bob_model.calls[0]["messages"]
+    )
+    assert "Character: concise and practical." in alice_prompt
+    assert "alice prefers concise" in alice_prompt
+    assert "bob prefers" not in alice_prompt
+    assert "Character: detailed and instructional." in bob_prompt
+    assert "bob prefers step-by-step" in bob_prompt
+    assert "alice prefers" not in bob_prompt
 
 
 @pytest.mark.asyncio

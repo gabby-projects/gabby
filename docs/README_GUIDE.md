@@ -589,9 +589,44 @@ is required.
 
 ## Knowledge retrieval
 
-The retriever is injected by the consuming application, so document storage and lifetime remain
-outside an agent run. Gabby includes an in-memory BM25 retriever for fixtures and a persistent
-SQLite FTS5 store for local or single-service use:
+Gabby's RAG path is a runtime pipeline: the host selects an agent configuration and appropriately
+scoped retriever, the retriever finds relevant documents for the request, Gabby validates and bounds
+the returned context, and the model receives it as reference material. Document storage and lifetime
+remain outside an agent run. Gabby includes an in-memory BM25 retriever for fixtures and a persistent
+SQLite FTS5 store for local or single-service use.
+
+An agent configuration can describe a user-requested character and enable knowledge retrieval:
+
+```yaml
+name: writing-companion
+description: Adapts its writing help to the user's requested style.
+model:
+  provider: openai_compatible
+  model: your-model-name
+instructions: |
+  Character: be warm, concise, and practical.
+  Adapt the tone to the user preferences supplied by the host.
+knowledge:
+  sources: [user-profile, writing-guides]
+  top_k: 5
+policies:
+  allowed_tools: []
+  max_steps: 8
+```
+
+For per-user adaptation, the host authenticates the caller and selects that user's configuration
+and retrieval scope. The retriever contract receives the request text and result limit, not an
+authenticated user identity, so inject a retriever already scoped to the caller or supply validated
+user context through `RunRequest.context` / `RunRequest.memory`. Never use an untrusted request field
+as the identity or tenant boundary. The host owns storage and persistence of user preferences because
+Gabby is stateless between runs.
+
+RAG supplies relevant context; it does not enforce a character or policy. Gabby marks retrieved
+documents as untrusted reference data, while configured instructions shape the response and runtime
+policies govern tool access and execution. A retrieved document cannot grant a capability or
+override those controls.
+
+The retriever is injected by the consuming application:
 
 ```python
 from gabby import Agent, Document, InMemoryBM25Retriever
