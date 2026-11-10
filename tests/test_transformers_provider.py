@@ -318,9 +318,6 @@ def test_transformers_provider_snapshots_bounded_tool_response_template() -> Non
     [
         {"api_key_env": "bad name"},
         {"revision": 7},
-        {"adapter_id": ""},
-        {"adapter_revision": "abc"},
-        {"adapter_revision": 7},
         {"cache_dir": 7},
         {"device": 7},
         {"local_files_only": "yes"},
@@ -392,90 +389,6 @@ def test_transformers_provider_loads_safely_and_caches_backend(
     provider._clear_model()
     assert provider._model is None
     assert provider._tokenizer is None
-
-
-def test_transformers_provider_loads_peft_adapter_for_inference(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    tokenizer = _Tokenizer()
-    base_model = _LoadableModel()
-    adapter_calls: list[tuple[Any, str, dict[str, Any]]] = []
-    torch_module = ModuleType("torch")
-    transformers_module = ModuleType("transformers")
-    transformers_module.__dict__.update(
-        {
-            "AutoTokenizer": SimpleNamespace(from_pretrained=lambda *_args, **_kwargs: tokenizer),
-            "AutoModelForCausalLM": SimpleNamespace(
-                from_pretrained=lambda *_args, **_kwargs: base_model
-            ),
-            "StoppingCriteria": _StopCriteria,
-        }
-    )
-    peft_module = ModuleType("peft")
-
-    def load_adapter(model: Any, adapter_id: str, **options: Any) -> Any:
-        adapter_calls.append((model, adapter_id, options))
-        return model
-
-    peft_module.__dict__["PeftModel"] = SimpleNamespace(from_pretrained=load_adapter)
-    monkeypatch.setitem(sys.modules, "torch", torch_module)
-    monkeypatch.setitem(sys.modules, "transformers", transformers_module)
-    monkeypatch.setitem(sys.modules, "peft", peft_module)
-    monkeypatch.setenv("TEST_HF_TOKEN", "adapter-test-token")
-    provider = TransformersProvider(
-        model_id="org/base-model",
-        token_env="TEST_HF_TOKEN",
-        revision="base-revision",
-        adapter_id="org/adapter",
-        adapter_revision="adapter-revision",
-        cache_dir="/tmp/model-cache",
-        local_files_only=True,
-    )
-
-    _tokenizer, loaded_model, _torch, _stopping = provider._load_model()
-
-    assert loaded_model is base_model
-    assert adapter_calls == [
-        (
-            base_model,
-            "org/adapter",
-            {
-                "is_trainable": False,
-                "local_files_only": True,
-                "use_safetensors": True,
-                "token": "adapter-test-token",
-                "revision": "adapter-revision",
-                "cache_dir": "/tmp/model-cache",
-            },
-        )
-    ]
-    assert base_model.loaded_device == "cpu"
-    assert base_model.evaluated
-
-
-def test_transformers_provider_reports_missing_peft_extra(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    torch_module = ModuleType("torch")
-    transformers_module = ModuleType("transformers")
-    transformers_module.__dict__.update(
-        {
-            "AutoTokenizer": SimpleNamespace(
-                from_pretrained=lambda *_args, **_kwargs: _Tokenizer()
-            ),
-            "AutoModelForCausalLM": SimpleNamespace(
-                from_pretrained=lambda *_args, **_kwargs: _LoadableModel()
-            ),
-            "StoppingCriteria": _StopCriteria,
-        }
-    )
-    monkeypatch.setitem(sys.modules, "torch", torch_module)
-    monkeypatch.setitem(sys.modules, "transformers", transformers_module)
-    monkeypatch.setitem(sys.modules, "peft", None)
-    provider = TransformersProvider(model_id="org/base", adapter_id="org/adapter")
-
-    with pytest.raises(ModelError, match="'transformers-adapters'"):
-        provider._load_model()
 
 
 def test_transformers_provider_load_errors_are_sanitized(

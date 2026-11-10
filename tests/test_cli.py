@@ -28,7 +28,6 @@ from typing import Any
 import pytest
 
 from gabby import EmbeddingInputFormat
-from gabby import training as training_module
 from gabby.cli import _load_trusted_skill_keys, _resolve_trusted_skill_keys, main
 from gabby.config import ConfigError, load_agent, load_skill
 from gabby.knowledge import Document, SQLiteFTS5Store
@@ -1346,64 +1345,3 @@ def test_cli_embedding_provider_profile_accepts_gemini_options(tmp_path: Path) -
     assert provider_config["type"] == "gemini"
     assert provider_config["dimensions"] == 768
     assert input_format == EmbeddingInputFormat()
-
-
-def test_cli_train_builds_config_and_emits_json_manifest(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    observed: dict[str, Any] = {}
-
-    def train(config: training_module.SFTConfig) -> dict[str, Any]:
-        observed["config"] = config
-        return {"format": "gabby-sft-lora-v1", "example_count": 3}
-
-    monkeypatch.setattr(training_module, "train_lora_sft", train)
-    result = main(
-        [
-            "train",
-            "--model",
-            "org/model",
-            "--dataset",
-            str(tmp_path / "data.jsonl"),
-            "--output",
-            str(tmp_path / "adapter"),
-            "--revision",
-            "abc123",
-            "--target-module",
-            "q_proj",
-            "--target-module",
-            "v_proj",
-        ]
-    )
-
-    assert result == 0
-    assert observed["config"].model_id == "org/model"
-    assert observed["config"].revision == "abc123"
-    assert observed["config"].target_modules == ("q_proj", "v_proj")
-    assert json.loads(capsys.readouterr().out) == {
-        "format": "gabby-sft-lora-v1",
-        "example_count": 3,
-    }
-
-
-def test_cli_train_can_check_dataset_without_model_dependencies(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    dataset = tmp_path / "train.jsonl"
-    dataset.write_text(
-        '{"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"hello"}]}\n',
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        training_module,
-        "train_lora_sft",
-        lambda _config: pytest.fail("dataset check must not start training"),
-    )
-
-    result = main(["train", "--dataset", str(dataset), "--check-dataset"])
-
-    assert result == 0
-    report = json.loads(capsys.readouterr().out)
-    assert report["validation"] == "passed"
-    assert report["example_count"] == 1
-    assert len(report["dataset_sha256"]) == 64

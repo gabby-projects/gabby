@@ -9,24 +9,6 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 
-[[package]]
-name = "accelerate"
-version = "1.15.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "huggingface-hub" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "packaging" },
-    { name = "psutil" },
-    { name = "pyyaml" },
-    { name = "safetensors" },
-    { name = "torch" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f5/b5/1d3ed029ac71d3f2961346829a268da923698e9fd63f218f78841f216bfd/accelerate-1.15.0.tar.gz", hash = "sha256:5654f8c5eaa0d4fa68b33e287a97765da6849bf6d51dcac874e73fbbddfb6134", size = 422615, upload-time = "2026-09-09T13:04:49.078Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8a/4c/34f0450479d01195027260da68d8a3880683f1640c3ca5adf64acb3185f1/accelerate-1.15.0-py3-none-any.whl", hash = "sha256:97eacca0b73e45cb867dbf8c5d5d4dc32219544300e0c8992c7334dc2ef33cec", size = 394295, upload-time = "2026-09-09T13:04:47.331Z" },
-]
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -959,15 +941,8 @@ server = [
 skill-signing = [
     { name = "cryptography" },
 ]
-training = [
-    { name = "accelerate" },
-    { name = "peft" },
-]
 transformers = [
     { name = "transformers" },
-]
-transformers-adapters = [
-    { name = "peft" },
 ]
 windows-sandbox = [
     { name = "aiohttp" },
@@ -988,7 +963,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "accelerate", marker = "extra == 'training'", specifier = ">=1,<2" },
     { name = "aiohttp", marker = "extra == 'windows-sandbox'", specifier = ">=3.11,<4" },
     { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.31,<1" },
     { name = "cryptography", marker = "extra == 'skill-signing'", specifier = ">=50,<51" },
@@ -998,8 +972,6 @@ requires-dist = [
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.0.0,<3" },
     { name = "opentelemetry-api", marker = "extra == 'observability'", specifier = ">=1.27,<2" },
     { name = "opentelemetry-sdk", marker = "extra == 'observability'", specifier = ">=1.27,<2" },
-    { name = "peft", marker = "extra == 'training'", specifier = ">=0.19.1,<1" },
-    { name = "peft", marker = "extra == 'transformers-adapters'", specifier = ">=0.19.1,<1" },
     { name = "pillow", marker = "extra == 'ocr'", specifier = ">=13,<14" },
     { name = "pyarrow", marker = "extra == 'parquet'", specifier = ">=23,<27" },
     { name = "pyjwt", extras = ["crypto"], marker = "extra == 'auth'", specifier = ">=2.13,<3" },
@@ -1012,7 +984,7 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'transformers'", specifier = ">=5.18,<6" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.34,<1" },
 ]
-provides-extras = ["server", "auth", "pdf", "ocr", "pdf-ocr", "parquet", "transformers", "transformers-adapters", "training", "windows-sandbox", "observability", "skill-signing", "mcp", "postgres"]
+provides-extras = ["server", "auth", "pdf", "ocr", "pdf-ocr", "parquet", "transformers", "windows-sandbox", "observability", "skill-signing", "mcp", "postgres"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2085,27 +2057,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", hash = "sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", size = 57328, upload-time = "2026-04-27T01:46:07.06Z" },
 ]
 
-[[package]]
-name = "peft"
-version = "0.21.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "accelerate" },
-    { name = "huggingface-hub" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "packaging" },
-    { name = "psutil" },
-    { name = "pyyaml" },
-    { name = "safetensors" },
-    { name = "torch" },
-    { name = "tqdm" },
-    { name = "transformers" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/80/af/2e08abf1cd3b8792a02f5116808f2398c2f77ecdff801ced2ce16007a6f9/peft-0.21.2.tar.gz", hash = "sha256:b803ccfb3f3f316004d850284306687833a2235ea278fb56abc856203456142e", size = 983614, upload-time = "2026-10-01T10:26:36.129Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/0b/59441cdbfdd342ed03c08af90a2fe16173f0cd48ab219f523b39ca059a79/peft-0.21.2-py3-none-any.whl", hash = "sha256:106ab6077ff72c54d21577f9af5970e34bac7582cb14209f7b2b511e322a4eae", size = 835427, upload-time = "2026-10-01T10:26:34.085Z" },
-]
 
 [[package]]
 name = "pillow"

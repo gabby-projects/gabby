@@ -90,10 +90,6 @@ to `https://generativelanguage.googleapis.com/v1beta`. See the official
 [Gemini GenerateContent guide](https://ai.google.dev/gemini-api/docs/generate-content) and
 [function calling guide](https://ai.google.dev/gemini-api/docs/generate-content/function-calling).
 
-Optional local supervised fine-tuning can produce PEFT LoRA adapters using `gabby train`; this is
-separate from runtime agent specialization. See the [local adapter training guide](../docs/TRAINING.md)
-for the bounded JSONL format, install steps, and a command example.
-
 For local Hugging Face Transformers inference, install `gabby-agent-runtime[transformers]` and a
 PyTorch 2.5+ build selected for your CPU/GPU platform. Set `provider: transformers`; model weights are
 loaded lazily on first execution. The default device is CPU. Configure `revision` to pin a Hub
@@ -107,23 +103,11 @@ PyTorch using the
 [official platform selector](https://pytorch.org/get-started/locally/) because CPU, CUDA, and other
 accelerator builds differ.
 
-To load a previously trained PEFT adapter, also install
-`gabby-agent-runtime[transformers-adapters]` and set `adapter_id` in the model configuration.
-`adapter_id` can be a local adapter directory or a Hub repository; `adapter_revision` optionally
-pins the adapter revision separately from the base model's `revision`. The adapter is loaded for
-inference only and Gabby requires safetensors adapter weights. Install the PyTorch build for your
-platform before the adapter extra so the package resolver reuses that build. This provider does not
-train or update weights; the separate `gabby train` command can produce a LoRA adapter locally.
-Keep the base model and adapter compatible, and pin Hub revisions for reproducible deployments.
-Adapter files and their producer are separate trust inputs from the base model configuration.
-
 ```yaml
 model:
   provider: transformers
   model: HuggingFaceTB/SmolLM3-3B
   revision: <commit-sha>
-  # adapter_id: organization/adapter-repository
-  # adapter_revision: <adapter-commit-sha>
   device: cpu
   max_input_tokens: 16384
   max_new_tokens: 1024

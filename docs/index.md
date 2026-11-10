@@ -47,8 +47,6 @@ roadmap and scorecard separate implementation from release evidence.
 - [Approval handling](APPROVALS.md) — host-owned approval decisions and audit records.
 - [SQLite data tool](SQLITE_DATA.md) — bounded read-only SQL against a host-selected database.
 - [Sandboxed Python tool](PYTHON_TOOL.md) — execute bounded Python in a per-run container.
-- [Training](TRAINING.md) — optional local LoRA adaptation and its separation from runtime
-  specialization.
 
 ## Operations and security
 

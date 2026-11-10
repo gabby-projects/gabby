@@ -275,42 +275,6 @@ def _parser() -> argparse.ArgumentParser:
         default=Path("./.gabby/knowledge.db"),
         help="SQLite knowledge database (default: ./.gabby/knowledge.db)",
     )
-    train = commands.add_parser(
-        "train", help="Train a local inference adapter from bounded assistant-only JSONL data"
-    )
-    train.add_argument("--model", help="Hugging Face model ID or local model path")
-    train.add_argument("--dataset", required=True, type=Path, help="UTF-8 JSONL chat dataset")
-    train.add_argument("--output", type=Path, help="New adapter output directory")
-    train.add_argument(
-        "--check-dataset",
-        action="store_true",
-        help="Validate JSONL structure and print its digest without importing ML dependencies",
-    )
-    train.add_argument("--revision", help="Optional base model Hub commit or tag")
-    train.add_argument(
-        "--token-env", default="HF_TOKEN", help="Hub token environment variable (default: HF_TOKEN)"
-    )
-    train.add_argument(
-        "--local-files-only",
-        action="store_true",
-        help="Refuse to download model files; load only from the local model cache or path",
-    )
-    train.add_argument("--max-examples", type=int, default=10_000)
-    train.add_argument("--max-sequence-length", type=int, default=2048)
-    train.add_argument("--epochs", type=float, default=1.0)
-    train.add_argument("--batch-size", type=int, default=1)
-    train.add_argument("--gradient-accumulation-steps", type=int, default=8)
-    train.add_argument("--seed", type=int, default=42)
-    train.add_argument("--learning-rate", type=float, default=0.0002)
-    train.add_argument("--lora-rank", type=int, default=8)
-    train.add_argument("--lora-alpha", type=int, default=16)
-    train.add_argument("--lora-dropout", type=float, default=0.05)
-    train.add_argument(
-        "--target-module",
-        action="append",
-        default=[],
-        help="PEFT LoRA target module name; repeat for model-specific module names",
-    )
     evaluation = commands.add_parser("evaluate", help="Run a bounded JSONL agent regression suite")
     evaluation.add_argument("agent", type=Path)
     evaluation.add_argument("--dataset", required=True, type=Path, help="JSON Lines case dataset")
@@ -641,53 +605,6 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_run_knowledge_command(args))
         if args.command == "embeddings":
             return asyncio.run(_run_embedding_evaluation_command(args))
-        if args.command == "train":
-            from .training import SFTConfig, load_sft_dataset, train_lora_sft
-
-            if args.check_dataset:
-                examples, dataset_sha256 = load_sft_dataset(
-                    args.dataset, max_examples=args.max_examples
-                )
-                print(
-                    json.dumps(
-                        {
-                            "validation": "passed",
-                            "example_count": len(examples),
-                            "dataset_sha256": dataset_sha256,
-                        },
-                        ensure_ascii=True,
-                        sort_keys=True,
-                    )
-                )
-                return 0
-            if args.model is None:
-                raise ConfigError("--model is required unless --check-dataset is used")
-            if args.output is None:
-                raise ConfigError("--output is required unless --check-dataset is used")
-
-            manifest = train_lora_sft(
-                SFTConfig(
-                    model_id=args.model,
-                    dataset=args.dataset,
-                    output=args.output,
-                    revision=args.revision,
-                    token_env=args.token_env,
-                    local_files_only=args.local_files_only,
-                    max_examples=args.max_examples,
-                    max_sequence_length=args.max_sequence_length,
-                    epochs=args.epochs,
-                    batch_size=args.batch_size,
-                    gradient_accumulation_steps=args.gradient_accumulation_steps,
-                    seed=args.seed,
-                    learning_rate=args.learning_rate,
-                    lora_rank=args.lora_rank,
-                    lora_alpha=args.lora_alpha,
-                    lora_dropout=args.lora_dropout,
-                    target_modules=tuple(args.target_module),
-                )
-            )
-            print(json.dumps(manifest, ensure_ascii=True, sort_keys=True, indent=2))
-            return 0
         definition = load_agent(args.agent)
         if args.command == "evaluate":
             return asyncio.run(_run_evaluation_command(definition, args))
