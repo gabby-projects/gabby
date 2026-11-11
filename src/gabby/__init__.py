@@ -82,6 +82,7 @@ from .evaluation import (
     evaluate_agent,
     load_evaluation_dataset,
 )
+from .host_context import HostContext
 from .hybrid import HybridRetriever, RerankingRetriever
 from .indexing import (
     GenerationBusyError,
@@ -228,7 +229,7 @@ from .tools import (
 )
 from .tracing import ExecutionTrace, TraceEvent, Tracer
 from .vector import SQLiteVectorStore
-from .verification import VerificationResult, Verifier
+from .verification import PersonaVerifier, VerificationResult, Verifier
 
 __all__ = [
     "Agent",
@@ -379,6 +380,8 @@ __all__ = [
     "WorkspaceMount",
     "VerificationResult",
     "Verifier",
+    "PersonaVerifier",
+    "HostContext",
     "validate_agent_definition",
     "validate_skill_definition",
     "install_skill",

@@ -147,7 +147,7 @@ def _check_wheel(path: Path) -> list[str]:
         for name, description in (
             ("gabby/__init__.py", "the importable Gabby package"),
             ("gabby/ingestion.py", "the ingestion implementation"),
-            ("gabby/training.py", "the optional adapter training implementation"),
+            ("gabby/host_context.py", "the typed host context contract"),
             ("gabby/py.typed", "the PEP 561 typing marker"),
         ):
             if name not in names:
@@ -190,7 +190,7 @@ def _check_sdist(path: Path) -> list[str]:
         for suffix, description in (
             ("/src/gabby/__init__.py", "the importable Gabby package"),
             ("/src/gabby/ingestion.py", "the ingestion implementation"),
-            ("/src/gabby/training.py", "the optional adapter training implementation"),
+            ("/src/gabby/host_context.py", "the typed host context contract"),
             ("/src/gabby/py.typed", "the PEP 561 typing marker"),
             ("/LICENSE", "the project license"),
         ):

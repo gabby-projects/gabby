@@ -745,9 +745,12 @@ def resolve_agent_definition(
         values = persona.get(key, ())
         if values:
             persona_sections.append(label + ":\n- " + "\n- ".join(values))
-    persona_prompt = "Structured persona (behavioral guidance; policies remain authoritative):\n" + (
-        "\n".join(persona_sections) if persona_sections else ""
-    ) if persona_sections else ""
+    persona_prompt = (
+        "Structured persona (behavioral guidance; policies remain authoritative):\n"
+        + ("\n".join(persona_sections) if persona_sections else "")
+        if persona_sections
+        else ""
+    )
     return ResolvedAgentDefinition(
         name=frozen_config["name"],
         model=frozen_config["model"],
@@ -1027,7 +1030,9 @@ def validate_agent_definition(definition: AgentDefinition) -> None:
     _reject_unknown_fields(
         definition.persona,
         "persona",
-        frozenset({"role", "tone", "communication_style", "escalation_rules", "forbidden_behaviors"}),
+        frozenset(
+            {"role", "tone", "communication_style", "escalation_rules", "forbidden_behaviors"}
+        ),
     )
     for key in ("role", "tone", "communication_style"):
         if key in definition.persona:

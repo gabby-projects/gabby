@@ -26,6 +26,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 
 from ._sync_runner import SyncLoopBridge
+from .host_context import HostContext
 from .server import DEFAULT_MAX_HTTP_RESPONSE_BYTES
 
 
@@ -150,12 +151,13 @@ class GabbyClient:
         context: Mapping[str, Any] | None = None,
         memory: Mapping[str, Any] | None = None,
         metadata: Mapping[str, Any] | None = None,
+        host_context: HostContext | Mapping[str, Any] | None = None,
         include_trace: bool = True,
     ) -> RunResult:
         """Submit one task and return its output and optional execution trace."""
         self._bind("async")
         url = self._url("run")
-        payload = self._payload(input, context, memory, metadata, include_trace)
+        payload = self._payload(input, context, memory, metadata, host_context, include_trace)
         client = self._get_client()
         async with client.stream("POST", url, json=payload, headers=self._headers) as response:
             body = await self._read_bounded(response)
@@ -186,6 +188,7 @@ class GabbyClient:
         context: Mapping[str, Any] | None = None,
         memory: Mapping[str, Any] | None = None,
         metadata: Mapping[str, Any] | None = None,
+        host_context: HostContext | Mapping[str, Any] | None = None,
         include_trace: bool = True,
         idempotency_key: str | None = None,
         last_event_id: str | None = None,
@@ -213,7 +216,7 @@ class GabbyClient:
         ):
             raise ValueError("last_event_id requires a valid idempotency_key and numeric event ID")
         url = self._url("stream")
-        payload = self._payload(input, context, memory, metadata, include_trace)
+        payload = self._payload(input, context, memory, metadata, host_context, include_trace)
         headers = dict(self._headers)
         if idempotency_key is not None:
             headers["Idempotency-Key"] = idempotency_key
@@ -330,6 +333,7 @@ class GabbyClient:
         context: Mapping[str, Any] | None,
         memory: Mapping[str, Any] | None,
         metadata: Mapping[str, Any] | None,
+        host_context: HostContext | Mapping[str, Any] | None,
         include_trace: bool,
     ) -> dict[str, Any]:
         if not isinstance(input, str) or not input:
@@ -337,15 +341,22 @@ class GabbyClient:
         for name, value in (("context", context), ("memory", memory), ("metadata", metadata)):
             if value is not None and not isinstance(value, Mapping):
                 raise TypeError(f"{name} must be a mapping")
+        if host_context is not None and not isinstance(host_context, (HostContext, Mapping)):
+            raise TypeError("host_context must be a HostContext or mapping")
         if not isinstance(include_trace, bool):
             raise TypeError("include_trace must be a boolean")
-        return {
+        payload = {
             "input": input,
             "context": dict(context or {}),
             "memory": dict(memory or {}),
             "metadata": dict(metadata or {}),
             "include_trace": include_trace,
         }
+        if host_context is not None:
+            payload["host_context"] = HostContext.model_validate(host_context).model_dump(
+                mode="json", exclude_none=True, exclude_defaults=True
+            )
+        return payload
 
     async def _read_bounded(self, response: httpx.Response) -> bytes:
         chunks: list[bytes] = []

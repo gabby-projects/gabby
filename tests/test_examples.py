@@ -236,8 +236,6 @@ async def test_stateless_sse_client_rejects_insecure_or_credentialed_base_urls(
             ]
 
 
-
-
 @pytest.mark.asyncio
 async def test_hosted_service_factory_loads_config_and_requires_bearer_auth(
     monkeypatch: pytest.MonkeyPatch,

@@ -1077,9 +1077,7 @@ def _load_embedding_provider_config(
         raise ConfigError("provider.type must be a string")
     allowed_options = _EMBEDDING_PROVIDER_OPTIONS.get(kind)
     if allowed_options is None:
-        raise ConfigError(
-            "provider.type must be openai_compatible, gemini, or huggingface"
-        )
+        raise ConfigError("provider.type must be openai_compatible, gemini, or huggingface")
     unknown_options = set(provider_config) - (allowed_options | {"type"})
     if unknown_options:
         raise ConfigError(

@@ -195,14 +195,23 @@ def make_agent(model: FakeModel | None = None) -> Agent:
 
 @pytest.mark.asyncio
 async def test_fastapi_stateless_run_and_health_routes() -> None:
-    app = create_app(make_agent(), allow_unauthenticated=True)
+    model = FakeModel()
+    app = create_app(make_agent(model), allow_unauthenticated=True)
     async with (
         app.router.lifespan_context(app),
         httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client,
     ):
         assert (await client.get("/health")).json() == {"status": "ok"}
         response = await client.post(
-            "/v1/agents/test-agent/run", json={"input": "hello", "context": {"x": 1}}
+            "/v1/agents/test-agent/run",
+            json={
+                "input": "hello",
+                "context": {"x": 1},
+                "host_context": {
+                    "user_preferences": {"locale": "en-AU"},
+                    "rag_snippets": [{"text": "Reference", "source": "guide.md"}],
+                },
+            },
         )
         unversioned = await client.post("/agents/test-agent/run", json={"input": "hello"})
 
@@ -213,6 +222,11 @@ async def test_fastapi_stateless_run_and_health_routes() -> None:
     assert payload["trace_id"]
     assert "trace" in payload
     assert payload["trace"] is not None
+    assert any(
+        "Host-provided personalization" in message.get("content", "")
+        and "en-AU" in message.get("content", "")
+        for message in model.calls[0]["messages"]
+    )
 
 
 @pytest.mark.asyncio

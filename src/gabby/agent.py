@@ -48,6 +48,7 @@ from .config import (
     validate_skill_definition,
 )
 from .environment import Environment, ResolvedEnvironment
+from .host_context import HostContext
 from .knowledge import Retriever
 from .models import (
     AnthropicProvider,
@@ -72,7 +73,7 @@ from .skill_trust import (
 )
 from .tools import DefaultPolicyEngineFactory, PolicyEngineFactory, ToolRegistry
 from .tracing import Tracer
-from .verification import Verifier
+from .verification import PersonaVerifier, Verifier
 
 
 def _skill_files_under(base: Path, name: str) -> list[tuple[str | None, Path]]:
@@ -156,6 +157,7 @@ class Agent:
         tools: ToolRegistry | None = None,
         retriever: Retriever | None = None,
         verifier: Verifier | None = None,
+        persona_verifier: PersonaVerifier | None = None,
         environment: Environment | None = None,
         policy_engine_factory: PolicyEngineFactory | None = None,
         sandbox_adapter: EngineAdapter | None = None,
@@ -334,6 +336,7 @@ class Agent:
         self.model = model or self._provider_from_definition()
         self.retriever = retriever
         self.verifier = verifier
+        self.persona_verifier = persona_verifier
         self.tracer = tracer
         self.approval_handler = approval_handler
         self.sandbox_adapter = sandbox_adapter
@@ -716,6 +719,16 @@ class Agent:
                 len(value.encode("utf-8"))
                 for value in (skill.description, skill.instructions, skill.examples)
             )
+            if skill.style:
+                skill_text_bytes += len(
+                    json.dumps(
+                        skill.style,
+                        ensure_ascii=False,
+                        allow_nan=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                )
             for schema in (skill.input_schema, skill.output_schema):
                 if schema is not None:
                     skill_text_bytes += len(
@@ -765,6 +778,7 @@ class Agent:
         context: dict[str, Any] | None = None,
         memory: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
+        host_context: HostContext | Mapping[str, Any] | None = None,
         principal: Principal | None = None,
     ) -> ExecutionResult:
         """Execute one request and return its output, metadata, and trace.
@@ -778,6 +792,7 @@ class Agent:
             context: Optional caller-owned facts or conversation context to include in the request.
             memory: Optional caller-owned memory supplied for this run; Gabby does not persist it.
             metadata: Optional caller metadata for extensions and trace correlation.
+            host_context: Optional typed personalization context scoped by the host to this run.
             principal: Optional authenticated caller identity for policy and approval extensions.
 
         Returns:
@@ -791,7 +806,12 @@ class Agent:
         self._begin_async_run()
         try:
             return await self._execute(
-                input, context=context, memory=memory, metadata=metadata, principal=principal
+                input,
+                context=context,
+                memory=memory,
+                metadata=metadata,
+                host_context=host_context,
+                principal=principal,
             )
         finally:
             self._finish_async_run()
@@ -803,6 +823,7 @@ class Agent:
         context: dict[str, Any] | None = None,
         memory: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
+        host_context: HostContext | Mapping[str, Any] | None = None,
         principal: Principal | None = None,
         event_sink: Callable[[AgentStreamEvent], Awaitable[None]] | None = None,
     ) -> ExecutionResult:
@@ -813,12 +834,14 @@ class Agent:
             context={} if context is None else context,
             memory={} if memory is None else memory,
             metadata={} if metadata is None else metadata,
+            host_context=host_context,
             principal=principal,
             max_model_request_bytes=self.max_model_request_bytes,
         )
         return await Runtime(
             self,
             verifier=self.verifier,
+            persona_verifier=self.persona_verifier,
             tracer=self.tracer,
             approval_handler=self.approval_handler,
         ).run(request, event_sink=event_sink)
@@ -830,6 +853,7 @@ class Agent:
         context: dict[str, Any] | None = None,
         memory: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
+        host_context: HostContext | Mapping[str, Any] | None = None,
         principal: Principal | None = None,
     ) -> AsyncGenerator[AgentStreamEvent, None]:
         """Yield progress and text events for one independent asynchronous execution.
@@ -848,6 +872,7 @@ class Agent:
             context: Optional caller-owned context included only in this run.
             memory: Optional caller-owned memory included only in this run.
             metadata: Optional caller metadata for extensions and trace correlation.
+            host_context: Optional typed personalization context scoped by the host to this run.
             principal: Optional authenticated caller identity for policy and approval extensions.
 
         Yields:
@@ -872,6 +897,7 @@ class Agent:
                     context=context,
                     memory=memory,
                     metadata=metadata,
+                    host_context=host_context,
                     principal=principal,
                     event_sink=emit,
                 )
