@@ -2193,6 +2193,27 @@ async def test_tracer_timeout_is_bounded_and_does_not_fail_the_run(
 
 
 @pytest.mark.asyncio
+async def test_failed_run_exports_a_sanitized_failure_event() -> None:
+    class FailingModel:
+        async def complete(self, **_: Any) -> ModelResponse:
+            raise RuntimeError("provider detail must not be exported")
+
+    class RecordingTracer:
+        def __init__(self) -> None:
+            self.events: list[Any] = []
+
+        async def on_event(self, **kwargs: Any) -> None:
+            self.events.append(kwargs["event"])
+
+    tracer = RecordingTracer()
+    agent = _agent(FailingModel(), tracer=tracer)
+    with pytest.raises(RuntimeError, match="provider detail"):
+        await agent.arun("fail safely")
+    failure = next(event for event in tracer.events if event.kind == "run_failed")
+    assert failure.details == {"error_type": "RuntimeError"}
+
+
+@pytest.mark.asyncio
 async def test_timed_out_sync_tool_gets_cooperative_cancellation_signal() -> None:
     worker_started = threading.Event()
     cancellation_observed = threading.Event()

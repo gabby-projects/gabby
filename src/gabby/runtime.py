@@ -21,6 +21,7 @@ import inspect
 import json
 import math
 import time
+import uuid
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -77,7 +78,7 @@ from .tools import (
     ToolError,
     ToolErrorCode,
 )
-from .tracing import _PARENT_TRACE_ID, ExecutionTrace, TraceEvent, Tracer
+from .tracing import _CURRENT_TRACE_ID, _PARENT_TRACE_ID, ExecutionTrace, TraceEvent, Tracer
 from .verification import PersonaVerifier, VerificationResult, Verifier
 
 _MAX_TOOL_ERROR_MESSAGE_CHARS = 512
@@ -666,6 +667,35 @@ class Runtime:
         *,
         event_sink: Callable[[AgentStreamEvent], Awaitable[None]] | None = None,
     ) -> ExecutionResult:
+        """Run with one stable trace ID and report sanitized failures to exporters."""
+        trace_id = str(uuid.uuid4())
+        token = _CURRENT_TRACE_ID.set(trace_id)
+        try:
+            return await self._run(request, event_sink=event_sink)
+        except BaseException as exc:
+            if self.tracer is not None and not self._tracer_disabled:
+                with suppress(BaseException):
+                    await asyncio.wait_for(
+                        self.tracer.on_event(
+                            trace_id=trace_id,
+                            agent_name=self.agent.definition.name,
+                            event=TraceEvent(
+                                kind="run_failed",
+                                details={"error_type": type(exc).__name__},
+                            ),
+                        ),
+                        timeout=_TRACER_EVENT_TIMEOUT_SECONDS,
+                    )
+            raise
+        finally:
+            _CURRENT_TRACE_ID.reset(token)
+
+    async def _run(
+        self,
+        request: RunRequest,
+        *,
+        event_sink: Callable[[AgentStreamEvent], Awaitable[None]] | None = None,
+    ) -> ExecutionResult:
         """Execute a request with per-run temporary state and an optional event sink."""
         definition = self.agent.definition
         policies = definition.policies
@@ -907,7 +937,10 @@ class Runtime:
         trace_metadata: dict[str, Any] = {"agent": definition.name}
         if parent_trace_id is not None:
             trace_metadata["parent_trace_id"] = parent_trace_id
-        trace = ExecutionTrace(metadata=trace_metadata)
+        trace = ExecutionTrace(
+            trace_id=_CURRENT_TRACE_ID.get() or str(uuid.uuid4()),
+            metadata=trace_metadata,
+        )
         if skill_integrity_check_ms is not None:
             await self._record_trace(
                 trace,
@@ -1620,6 +1653,12 @@ class Runtime:
                             )
                 trace.metadata["usage"] = total_usage
                 trace.metadata["duration_ms"] = (time.perf_counter() - started) * 1000
+                await self._record_trace(
+                    trace,
+                    deadline=deadline,
+                    kind="run_completed",
+                    duration_ms=trace.metadata["duration_ms"],
+                )
                 result_metadata: dict[str, Any] = {
                     "agent": definition.name,
                     "usage": total_usage,

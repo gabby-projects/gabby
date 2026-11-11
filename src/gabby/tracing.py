@@ -15,13 +15,30 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import json
+import os
+import re
 import time
 import uuid
+from collections.abc import Mapping
 from contextvars import ContextVar
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
-from typing import Any, Protocol
+from pathlib import Path
+from typing import Any, Protocol, cast
 
 _PARENT_TRACE_ID: ContextVar[str | None] = ContextVar("gabby_parent_trace_id", default=None)
+_CURRENT_TRACE_ID: ContextVar[str | None] = ContextVar("gabby_current_trace_id", default=None)
+
+
+def _safe_tool_name(value: Any) -> str:
+    return (
+        value
+        if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value)
+        else "invalid-tool-name"
+    )
 
 
 @dataclass
@@ -65,3 +82,292 @@ class Tracer(Protocol):
     async def on_event(self, *, trace_id: str, agent_name: str, event: TraceEvent) -> None:
         """Export one event; callbacks can overlap across runs and should avoid blocking."""
         ...
+
+
+class CompositeTracer:
+    """Fan trace events out to multiple independent exporters."""
+
+    def __init__(self, *tracers: Tracer) -> None:
+        if not tracers or any(not callable(getattr(item, "on_event", None)) for item in tracers):
+            raise ValueError("CompositeTracer requires one or more Tracer implementations")
+        self._tracers = tuple(tracers)
+        self.errors: dict[str, int] = {}
+
+    async def on_event(self, *, trace_id: str, agent_name: str, event: TraceEvent) -> None:
+        """Export concurrently while retaining failures as sanitized exception type names."""
+        results = await asyncio.gather(
+            *(
+                tracer.on_event(trace_id=trace_id, agent_name=agent_name, event=event)
+                for tracer in self._tracers
+            ),
+            return_exceptions=True,
+        )
+        for result in results:
+            if isinstance(result, Exception):
+                error_type = type(result).__name__
+                self.errors[error_type] = self.errors.get(error_type, 0) + 1
+
+
+class OpenTelemetryTracer:
+    """Export Gabby trace events as OpenTelemetry spans.
+
+    Install ``gabby-agent-runtime[opentelemetry]`` and pass an SDK tracer. Only event
+    names, durations, and caller-selected safe attributes are exported; event payloads
+    are intentionally omitted because they can contain user data or secrets.
+    """
+
+    def __init__(self, tracer: Any = None) -> None:
+        if tracer is None:
+            try:
+                from opentelemetry import trace
+            except ImportError as exc:
+                raise RuntimeError(
+                    "OpenTelemetry support requires gabby-agent-runtime[opentelemetry]"
+                ) from exc
+            tracer = trace.get_tracer("gabby")
+        if not callable(getattr(tracer, "start_as_current_span", None)):
+            raise TypeError("tracer must provide start_as_current_span()")
+        self._tracer = tracer
+
+    async def on_event(self, *, trace_id: str, agent_name: str, event: TraceEvent) -> None:
+        """Record an event span without exporting its potentially sensitive details."""
+        span_context: Any = None
+        try:
+            from opentelemetry import trace
+
+            trace_number = int(trace_id.replace("-", ""), 16)
+            if trace_number == 0 or trace_number >= 2**128:
+                raise ValueError
+            span_context = trace.set_span_in_context(
+                trace.NonRecordingSpan(
+                    trace.SpanContext(
+                        trace_id=trace_number,
+                        span_id=uuid.uuid4().int & ((1 << 64) - 1) or 1,
+                        is_remote=True,
+                        trace_flags=trace.TraceFlags(trace.TraceFlags.SAMPLED),
+                    )
+                )
+            )
+        except (ImportError, ValueError):
+            # Injected test/host tracers remain usable without the optional OTel API installed.
+            span_context = None
+        span_manager = (
+            self._tracer.start_as_current_span(f"gabby.{event.kind}", context=span_context)
+            if span_context is not None
+            else self._tracer.start_as_current_span(f"gabby.{event.kind}")
+        )
+        with span_manager as span:
+            span.set_attribute("gabby.trace_id", trace_id)
+            span.set_attribute("gabby.agent", agent_name)
+            span.set_attribute("gabby.event", event.kind)
+            if event.duration_ms is not None:
+                span.set_attribute("gabby.duration_ms", event.duration_ms)
+
+
+def create_otlp_tracer(
+    *,
+    endpoint: str | None = None,
+    headers: dict[str, str] | None = None,
+    service_name: str = "gabby",
+) -> tuple[OpenTelemetryTracer, Any]:
+    """Create an OTLP/HTTP span exporter and return the tracer plus its owned provider."""
+    try:
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    except ImportError as exc:
+        raise RuntimeError("OTLP export requires gabby-agent-runtime[opentelemetry]") from exc
+    provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
+    provider.add_span_processor(
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, headers=headers))
+    )
+    return OpenTelemetryTracer(provider.get_tracer("gabby")), provider
+
+
+class SignedAuditExporter:
+    """Write hash-chained, Ed25519-signed audit evidence for policy/persona decisions.
+
+    The JSONL format is Gabby's audit format, not a claim of TRACE conformance. The key
+    must be protected and chain heads should be anchored outside this process for resistance
+    to whole-file replacement.
+    """
+
+    def __init__(self, path: str | Path, private_key: bytes) -> None:
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        except ImportError as exc:
+            raise RuntimeError(
+                "Signed audit export requires gabby-agent-runtime[skill-signing]"
+            ) from exc
+        if not isinstance(private_key, bytes) or len(private_key) != 32:
+            raise ValueError("private_key must be a 32-byte Ed25519 private key")
+        self._key = Ed25519PrivateKey.from_private_bytes(private_key)
+        self._path = Path(path)
+        self._previous_hash = "0" * 64
+        if self._path.exists():
+            self._previous_hash = self._last_hash()
+
+    async def on_event(self, *, trace_id: str, agent_name: str, event: TraceEvent) -> None:
+        """Append an integrity-protected record; omit prompts, arguments, and model output."""
+        proof: dict[str, Any] = {
+            "trace_id": trace_id,
+            "agent": agent_name[:128],
+            "timestamp": event.timestamp,
+            "event": event.kind,
+            "previous_hash": self._previous_hash,
+        }
+        safe_tool_name = _safe_tool_name(event.details.get("name"))
+        if event.kind == "tool_call":
+            proof["tool"] = safe_tool_name
+            proof["policy_decision"] = "allowed"
+            proof["tool_outcome"] = "completed"
+        elif event.kind == "tool_error":
+            proof["tool"] = safe_tool_name
+            denied = event.details.get("error_code") == "policy_denied"
+            proof["policy_decision"] = "denied" if denied else "allowed"
+            proof["tool_outcome"] = "failed"
+        elif event.kind == "persona_verification":
+            result = event.details.get("result")
+            if isinstance(result, dict):
+                passed = result.get("passed")
+                proof["persona_check"] = (
+                    {"passed": passed} if isinstance(passed, bool) else {"status": "invalid-result"}
+                )
+            else:
+                status = (
+                    result
+                    if isinstance(result, str) and result in {"started", "error", "invalid_result"}
+                    else "unknown"
+                )
+                proof["persona_check"] = {"status": status}
+        elif event.kind == "run_failed":
+            proof["run_status"] = "failed"
+        canonical = json.dumps(proof, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        record = {
+            **proof,
+            "record_hash": digest,
+            "signature": self._key.sign(digest.encode()).hex(),
+        }
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with self._path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        self._previous_hash = digest
+
+    def _last_hash(self) -> str:
+        last: dict[str, Any] | None = None
+        expected_previous = "0" * 64
+        with self._path.open(encoding="utf-8") as stream:
+            for line in stream:
+                if not line.strip():
+                    continue
+                current = json.loads(line)
+                signature = current.pop("signature", None)
+                digest = current.pop("record_hash", None)
+                canonical = json.dumps(
+                    current, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+                )
+                computed = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+                if current.get("previous_hash") != expected_previous or digest != computed:
+                    raise ValueError("audit file hash chain is invalid")
+                try:
+                    self._key.public_key().verify(bytes.fromhex(signature), digest.encode())
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("audit file signature is invalid") from exc
+                except Exception as exc:
+                    raise ValueError("audit file signature is invalid") from exc
+                current["record_hash"] = digest
+                last = current
+                expected_previous = digest
+        if last is None or not isinstance(last.get("record_hash"), str):
+            raise ValueError("audit file has no valid chain head")
+        return cast(str, last["record_hash"])
+
+
+class LFTraceExporter:
+    """Emit signed LF TRACE v0.2 Trust Records plus Gabby persona/policy evidence.
+
+    ``claims`` must contain deployment-owned TRACE fields such as ``subject``, ``model``,
+    ``runtime``, ``policy``, ``data_class``, ``build_provenance``, and ``appraisal``. Gabby
+    derives the tool-transcript commitment from policy outcomes. Persona-verifier outcomes are
+    written to a separate signed Gabby audit chain because TRACE v0.2 has no persona claim.
+    """
+
+    _RESERVED = frozenset({"eat_profile", "iat", "tool_transcript", "signature"})
+
+    def __init__(
+        self,
+        directory: str | Path,
+        *,
+        claims: Mapping[str, Any],
+        private_key: Any,
+        audit_exporter: SignedAuditExporter | None = None,
+    ) -> None:
+        if not isinstance(claims, Mapping) or self._RESERVED.intersection(claims):
+            raise ValueError("claims must be a mapping without TRACE-generated fields")
+        self._directory = Path(directory)
+        self._claims = deepcopy(dict(claims))
+        self._private_key = private_key
+        self._audit_exporter = audit_exporter
+        self._tool_entries: dict[str, list[dict[str, str]]] = {}
+
+    async def on_event(self, *, trace_id: str, agent_name: str, event: TraceEvent) -> None:
+        """Accumulate tool decisions and sign a Trust Record at successful run completion."""
+        if self._audit_exporter is not None:
+            await self._audit_exporter.on_event(
+                trace_id=trace_id, agent_name=agent_name, event=event
+            )
+        safe_tool_name = _safe_tool_name(event.details.get("name"))
+        if event.kind == "tool_call":
+            self._tool_entries.setdefault(trace_id, []).append(
+                {
+                    "tool_name": safe_tool_name,
+                    "decision": "allow",
+                }
+            )
+        elif event.kind == "tool_error":
+            self._tool_entries.setdefault(trace_id, []).append(
+                {
+                    "tool_name": safe_tool_name,
+                    "decision": (
+                        "deny" if event.details.get("error_code") == "policy_denied" else "allow"
+                    ),
+                }
+            )
+        elif event.kind == "run_completed":
+            await self._write_record(trace_id)
+        elif event.kind == "run_failed":
+            self._tool_entries.pop(trace_id, None)
+
+    async def _write_record(self, trace_id: str) -> None:
+        try:
+            import rfc8785
+            from agentrust_trace import sign_record
+        except ImportError as exc:
+            raise RuntimeError("LF TRACE export requires gabby-agent-runtime[trace]") from exc
+        entries = self._tool_entries.pop(trace_id, [])
+        transcript_hash = hashlib.sha256(rfc8785.dumps(entries)).hexdigest()
+        record = {
+            **deepcopy(self._claims),
+            "eat_profile": "tag:agentrust-io.com,2026:trace-v0.2",
+            "iat": int(time.time()),
+            "tool_transcript": {
+                "hash": f"sha256:{transcript_hash}",
+                "call_count": len(entries),
+            },
+        }
+        signed = sign_record(record, self._private_key)
+        if not isinstance(signed, Mapping):
+            raise TypeError("agentrust-trace sign_record() returned an invalid record")
+        self._directory.mkdir(parents=True, exist_ok=True)
+        destination = self._directory / f"{trace_id}.trace.json"
+        temporary = destination.with_suffix(".trace.json.tmp")
+        with temporary.open("w", encoding="utf-8") as stream:
+            json.dump(signed, stream, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(destination)

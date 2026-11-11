@@ -22,6 +22,8 @@ roadmap and scorecard separate implementation from release evidence.
 - [CLI and API guide](../README.md#cli-and-api) — use the `gabby` developer command line and
   local service.
 - [Python HTTP client](CLIENT.md) — call the stateless HTTP API from another Python application.
+- [Runtime integrations](INTEGRATIONS.md) — connect MCP servers, OpenTelemetry, signed audit
+  evidence, LangGraph, CrewAI, and n8n.
 
 ## Architecture and contracts
 
