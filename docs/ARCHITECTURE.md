@@ -23,6 +23,12 @@ agent to see. Gabby returns a result and optional trace; request-local state is 
 execution ends. The host application owns caller identity, durable state, and deployment-level
 isolation.
 
+The `/v1` run and stream payloads optionally accept a typed `host_context` envelope containing user
+preferences, a session summary, and retrieved snippets. It is validated and bounded as request data,
+added to model context as untrusted reference material, and discarded after the run. The host
+authenticates the caller and selects the corresponding data; this envelope is not an identity or
+tenant boundary. See the host-context contract in the user guide.
+
 Governance here means controls applied to an agent definition and its execution. It does not mean a
 hosted organizational control plane: Gabby does not centrally manage teams, identities, or policies
 across deployed applications. The host remains responsible for deciding who may call a deployment
@@ -56,6 +62,15 @@ The definition resolver validates YAML and programmatic `AgentDefinition` values
 ### Agent definition
 
 Persistent, versioned configuration: name, model reference, environment reference, skill references, tool grants, knowledge sources, instructions, policies, and verification configuration. It contains no live conversation state or credentials. Gabby rejects configured model API keys and credential-bearing headers for both YAML and in-memory definitions; secret values come from environment lookup or a provider injected by the host. See [ADR 0017](architecture/adr/0017-provider-credentials-outside-agent-config.md).
+
+An optional structured `persona` mapping contains `role`, `tone`, `communication_style`,
+`escalation_rules`, and `forbidden_behaviors`. Resolution validates and freezes these values, then
+compiles them to an immutable prompt section. Persona instructions guide generation but are not
+executable policy. Optional post-generation persona checking uses the injected `PersonaVerifier`
+when `verification.persona_compliance` is enabled; a missing verifier, verifier error, malformed
+result, timeout, or failed result rejects the run. The runtime buffers output until this check passes,
+including for SSE, so rejected content is not emitted as response text. This hook detects only what
+the host verifier can determine and does not guarantee non-generation of policy-violating content.
 
 An optional `output_schema` sets a machine-readable final-response contract. The runtime prompts
 provider-neutrally, parses strict JSON, validates it locally, and returns the parsed value as result
@@ -184,9 +199,15 @@ system message presents requirements in this order:
 
 1. Gabby runtime requirements and the resolved environment capabilities.
 2. Optional construction-time global instructions supplied to `Agent`.
-3. Agent instructions.
-4. Instructions for the skills activated for this run.
+3. Agent instructions and the structured core persona.
+4. Instructions and optional scoped style guidance for skills activated for this run.
 5. The caller's task.
+
+Skill style may specify voice, tone, and formatting rules for that skill's task, but the schema does
+not allow a skill to redefine the agent's role, escalation rules, or forbidden behaviors. The
+runtime prompt labels skill style as subordinate guidance, so an activated skill can specialize the
+presentation without replacing the agent's core character. Like other model instructions, style
+guidance is not deterministic enforcement; executable policies remain authoritative.
 
 Caller context and memory, retrieved documents, and tool observations are supplied as untrusted data.
 They cannot change the instruction order or policy. Retrieved documents are labeled as reference
