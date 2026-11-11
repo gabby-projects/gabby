@@ -47,6 +47,7 @@ from .config import (
     validate_agent_definition,
     validate_skill_definition,
 )
+from .credentials import ScopedCredentialProvider
 from .environment import Environment, ResolvedEnvironment
 from .filtered_provider import FilteredModelProvider
 from .host_context import HostContext
@@ -163,6 +164,7 @@ class Agent:
         payload_filters: Sequence[PayloadFilter] | None = None,
         environment: Environment | None = None,
         policy_engine_factory: PolicyEngineFactory | None = None,
+        credential_provider: ScopedCredentialProvider | None = None,
         sandbox_adapter: EngineAdapter | None = None,
         skill_registry: Mapping[str, SkillDefinition] | None = None,
         skill_trust_policy: SkillTrustPolicy | None = None,
@@ -184,6 +186,11 @@ class Agent:
             raise ConfigError("policy_engine_factory must provide create()")
         self._uses_default_policy_engine_factory = policy_engine_factory is None
         self.policy_engine_factory = selected_policy_engine_factory
+        if credential_provider is not None and not callable(
+            getattr(credential_provider, "resolve", None)
+        ):
+            raise ConfigError("credential_provider must provide async resolve()")
+        self.credential_provider = credential_provider
         if not isinstance(global_instructions, str):
             raise ConfigError("global_instructions must be a string")
         _validate_text_bytes("global_instructions", global_instructions, _MAX_AGENT_TEXT_BYTES)

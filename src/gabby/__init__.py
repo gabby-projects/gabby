@@ -55,6 +55,7 @@ from .config import (
     validate_agent_definition,
     validate_skill_definition,
 )
+from .credentials import ScopedCredentialProvider
 from .embedding_evaluation import (
     EmbeddingCandidate,
     EmbeddingCaseResult,
@@ -355,6 +356,7 @@ __all__ = [
     "Reranker",
     "SandboxCommandResult",
     "SandboxDefinition",
+    "ScopedCredentialProvider",
     "SandboxError",
     "SandboxResourceUsage",
     "SandboxResourceMonitor",

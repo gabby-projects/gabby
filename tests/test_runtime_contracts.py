@@ -39,7 +39,14 @@ from gabby.planning import ExecutionPlan, ModelPlanner, PlanningResult, PlanStep
 from gabby.runtime import AgentRuntimeError, RunRequest, Runtime
 from gabby.sandbox import SandboxOutputLimit, SandboxTimeout, SandboxUnavailable
 from gabby.skill_selection import ModelSkillSelector, SkillActivation, SkillSelection
-from gabby.tools import Tool, ToolContext, ToolError, ToolErrorCode, ToolRegistry
+from gabby.tools import (
+    DefaultPolicyEngineFactory,
+    Tool,
+    ToolContext,
+    ToolError,
+    ToolErrorCode,
+    ToolRegistry,
+)
 from gabby.verification import VerificationResult
 
 _ANY_JSON_SCHEMA = {"type": ["object", "array", "string", "number", "boolean", "null"]}
@@ -197,6 +204,75 @@ async def test_retrieval_context_and_selected_skill_reach_the_model() -> None:
     assert verification_event.details["result"] == result.metadata["verification"]
     assert [event.kind for event in result.trace.events].count("skill_activation") == 2
     assert any(event.kind == "retrieval" for event in result.trace.events)
+
+
+@pytest.mark.asyncio
+async def test_verified_scope_rules_restrict_tool_and_permission_grants() -> None:
+    policy = await DefaultPolicyEngineFactory().create(
+        declared_tools=["read", "delete"],
+        environment_allowed=None,
+        principal=Principal("alice", frozenset({"records:reader"})),
+        policies={
+            "allowed_tools": ["read", "delete"],
+            "allowed_permissions": ["records:read", "records:write"],
+            "scope_rules": {
+                "records:reader": {
+                    "allowed_tools": ["read"],
+                    "allowed_permissions": ["records:read"],
+                },
+                "records:admin": {
+                    "allowed_tools": ["read", "delete"],
+                    "allowed_permissions": ["records:read", "records:write"],
+                },
+            },
+        },
+    )
+    await policy.authorize_tool("read")
+    await policy.authorize_permissions("read", ["records:read"])
+    with pytest.raises(ToolError, match="Policy denied tool"):
+        await policy.authorize_tool("delete")
+    with pytest.raises(ToolError, match="missing permissions"):
+        await policy.authorize_permissions("read", ["records:write"])
+
+
+def test_verified_scope_can_add_configured_persona_guidance() -> None:
+    agent = _agent(
+        SequenceModel(ModelResponse(content="unused")),
+        policies={
+            "scope_rules": {
+                "support:senior": {"persona_instructions": "Use the incident commander voice."}
+            }
+        },
+    )
+    message = Runtime(agent)._system_message([], Principal("alice", frozenset({"support:senior"})))
+    assert "Use the incident commander voice." in message
+    assert "support:senior" not in Runtime(agent)._system_message([], Principal("bob"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("policies", "usage", "message"),
+    [
+        ({"max_total_tokens": 5}, {"total_tokens": 6}, "max_total_tokens=5"),
+        (
+            {
+                "max_cost_usd": 0.001,
+                "input_cost_per_1m_tokens": 10.0,
+                "output_cost_per_1m_tokens": 20.0,
+            },
+            {"prompt_tokens": 100, "completion_tokens": 50},
+            "max_cost_usd=0.001",
+        ),
+    ],
+)
+async def test_run_usage_circuit_breakers_stop_over_budget(
+    policies: dict[str, Any], usage: dict[str, int], message: str
+) -> None:
+    model = SequenceModel(ModelResponse(content="over budget", usage=usage))
+    agent = _agent(model, policies=policies)
+    with pytest.raises(AgentRuntimeError, match=message):
+        await agent.arun("Do one task")
+    assert len(model.calls) == 1
 
 
 @pytest.mark.asyncio

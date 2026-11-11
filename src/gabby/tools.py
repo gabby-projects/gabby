@@ -381,6 +381,7 @@ class PolicyEngine:
         policies: Mapping[str, Any],
         environment_allowed: Sequence[str] | None = None,
         allowed_permissions: Sequence[str] | None = None,
+        principal: Principal | None = None,
     ) -> None:
         self.declared_tools = set(declared_tools)
         configured = policies.get("allowed_tools", declared_tools)
@@ -391,6 +392,18 @@ class PolicyEngine:
         ):
             raise ValueError("policies.allowed_tools must be a list of tool names")
         self.allowed_tools = set(configured)
+        scope_rules = policies.get("scope_rules", {})
+        if not isinstance(scope_rules, Mapping):
+            raise ValueError("policies.scope_rules must be a mapping")
+        if any("allowed_tools" in rule for rule in scope_rules.values()):
+            matched = [
+                rule
+                for scope, rule in scope_rules.items()
+                if principal is not None and scope in principal.scopes
+            ]
+            scoped_tools = {name for rule in matched for name in rule.get("allowed_tools", [])}
+            # Configured base grants remain an upper bound; token scopes can only narrow them.
+            self.allowed_tools.intersection_update(scoped_tools)
         if environment_allowed is not None:
             self.allowed_tools.intersection_update(environment_allowed)
         if allowed_permissions is None:
@@ -402,6 +415,11 @@ class PolicyEngine:
         ):
             raise ValueError("policies.allowed_permissions must be a list of permission names")
         self.allowed_permissions = set(allowed_permissions)
+        if any("allowed_permissions" in rule for rule in scope_rules.values()):
+            scoped_permissions = {
+                name for rule in matched for name in rule.get("allowed_permissions", [])
+            }
+            self.allowed_permissions.intersection_update(scoped_permissions)
 
     async def authorize_tool(self, name: str) -> None:
         """Raise a policy denial when the declared tool is not granted."""
@@ -458,5 +476,9 @@ class DefaultPolicyEngineFactory:
         principal: Principal | None,
     ) -> PolicyEngineProtocol:
         """Build the default engine from the active grants, ignoring caller identity."""
-        del principal  # The default policy engine uses only configured tool and permission grants.
-        return PolicyEngine(declared_tools, policies, environment_allowed)
+        return PolicyEngine(
+            declared_tools,
+            policies,
+            environment_allowed,
+            principal=principal,
+        )

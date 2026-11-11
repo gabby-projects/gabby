@@ -1209,3 +1209,57 @@ per-principal scope sets. For local development, explicitly pass `allow_unauthen
 `/health` remains public. Custom authenticators return a `Principal` with Gabby capability scopes or
 `None`. The concurrency cap is per process; it is not a distributed limit or request-rate limiter.
 
+`JWTBearerAuthenticator` verifies a token against a host-configured issuer and audience and passes
+its verified scope set into `Principal`. The default policy engine can use `policies.scope_rules`
+to restrict tools and permissions and add configured persona guidance for matching scopes. Scope
+rules only narrow the agent's base `allowed_tools` and `allowed_permissions`; an unmatched caller is
+denied tools when any scope rule defines tool grants. Never trust identity or scopes supplied in the
+JSON request body.
+
+```yaml
+tools: [lookup_record, redact_record]
+policies:
+  allowed_tools: [lookup_record, redact_record]
+  allowed_permissions: [records:read, records:redact]
+  scope_rules:
+    records:reader:
+      allowed_tools: [lookup_record]
+      allowed_permissions: [records:read]
+      persona_instructions: Answer as a read-only support agent.
+    records:operator:
+      allowed_tools: [lookup_record, redact_record]
+      allowed_permissions: [records:read, records:redact]
+      persona_instructions: Use the operator workflow and explain each redaction.
+```
+
+The host must authenticate the token and configure token scopes or scope mapping at the auth
+boundary. Scope-based persona guidance is presentation guidance; it does not grant capabilities.
+
+## Per-run usage budgets
+
+Configure `max_total_tokens` to stop a run after aggregated provider-reported usage crosses the
+limit. For estimated USD limits, set `max_cost_usd` together with the model's
+`input_cost_per_1m_tokens` and `output_cost_per_1m_tokens` rates. Gabby checks selection, planning,
+and response usage after each completed provider call and stops before a subsequent run step. The
+provider call that first crosses a threshold has already completed and may exceed the limit by that
+call's usage; these are circuit breakers, not provider-side billing guarantees. Cost is an estimate
+from the configured rates and token counts, so configure rates for the deployed model and pricing
+plan. A provider that does not report the required usage causes the run to fail closed.
+
+```yaml
+policies:
+  max_total_tokens: 12000
+  max_cost_usd: 0.25
+  input_cost_per_1m_tokens: 0.15
+  output_cost_per_1m_tokens: 0.60
+```
+
+## Scoped sandbox credentials
+
+For a sandboxed Python or custom executable tool, inject an async `ScopedCredentialProvider` into
+`Agent`. Gabby resolves credentials separately for each tool call, bounds the returned environment
+mapping, and passes it only to that sandbox process. The host provider should mint credentials for
+the specific principal and tool, give them a short expiry and minimum permissions, and revoke or
+expire them promptly. Gabby never adds values to model context or traces. Host-trusted Python
+handlers should use their own resource boundary rather than this sandbox-only mechanism.
+

@@ -867,6 +867,11 @@ def _validate_execution_config(
                 "allowed_permissions",
                 "max_model_request_bytes",
                 "max_model_response_bytes",
+                "scope_rules",
+                "max_total_tokens",
+                "max_cost_usd",
+                "input_cost_per_1m_tokens",
+                "output_cost_per_1m_tokens",
             }
         ),
     )
@@ -958,6 +963,51 @@ def _validate_execution_config(
     for key in ("allowed_tools", "allowed_permissions"):
         if key in policies:
             _strings(policies[key], f"policies.{key}", allow_none=False)
+    if "scope_rules" in policies:
+        scope_rules = policies["scope_rules"]
+        if not isinstance(scope_rules, dict):
+            raise ConfigError("policies.scope_rules must be a mapping")
+        for scope, rule in scope_rules.items():
+            if not isinstance(scope, str) or not scope or not isinstance(rule, dict):
+                raise ConfigError("policies.scope_rules keys and values must be valid mappings")
+            _reject_unknown_fields(
+                rule,
+                f"policies.scope_rules.{scope}",
+                frozenset({"allowed_tools", "allowed_permissions", "persona_instructions"}),
+            )
+            for grant in ("allowed_tools", "allowed_permissions"):
+                if grant in rule:
+                    _strings(rule[grant], f"policies.scope_rules.{scope}.{grant}", allow_none=False)
+            if "persona_instructions" in rule and (
+                not isinstance(rule["persona_instructions"], str)
+                or len(rule["persona_instructions"].encode("utf-8")) > 8192
+            ):
+                raise ConfigError(
+                    f"policies.scope_rules.{scope}.persona_instructions must be a string "
+                    "up to 8192 UTF-8 bytes"
+                )
+    if "max_total_tokens" in policies:
+        value = policies["max_total_tokens"]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ConfigError("policies.max_total_tokens must be a positive integer")
+    for key in ("max_cost_usd", "input_cost_per_1m_tokens", "output_cost_per_1m_tokens"):
+        if key in policies:
+            value = policies[key]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 0
+                or (key == "max_cost_usd" and value == 0)
+            ):
+                raise ConfigError(f"policies.{key} must be a finite positive number")
+    if "max_cost_usd" in policies and not {
+        "input_cost_per_1m_tokens",
+        "output_cost_per_1m_tokens",
+    }.issubset(policies):
+        raise ConfigError(
+            "policies.max_cost_usd requires input_cost_per_1m_tokens and output_cost_per_1m_tokens"
+        )
 
     if "top_k" in knowledge:
         top_k = knowledge["top_k"]
