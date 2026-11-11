@@ -54,6 +54,25 @@ def test_load_agent_resolves_path_and_applies_optional_defaults(tmp_path: Path) 
     assert definition.policies == {}
 
 
+def test_load_agent_accepts_structured_persona_fields(tmp_path: Path) -> None:
+    source = tmp_path / "agent.yaml"
+    source.write_text(
+        "name: helper\nmodel:\n  provider: openai\n  model: x\n"
+        "persona:\n  role: Support assistant\n  tone: calm\n"
+        "  communication_style: Use plain language.\n"
+        "  escalation_rules: [Escalate suspected fraud]\n"
+        "  forbidden_behaviors: [Never request a full card number]\n",
+        encoding="utf-8",
+    )
+
+    definition = load_agent(source)
+
+    assert definition.persona["role"] == "Support assistant"
+    assert definition.persona["forbidden_behaviors"] == [
+        "Never request a full card number"
+    ]
+
+
 def test_load_agent_accepts_output_schema_and_programmatic_validation_matches(
     tmp_path: Path,
 ) -> None:
@@ -581,6 +600,49 @@ def test_load_skill_validates_name_and_string_lists(tmp_path: Path) -> None:
     assert skill.dependencies == ["analysis"]
     assert skill.triggers == ["review", "inspect"]
     assert skill.source_path == source.resolve()
+
+
+def test_load_skill_accepts_scoped_voice_and_formatting_style(tmp_path: Path) -> None:
+    source = tmp_path / "skill.yaml"
+    source.write_text(
+        "name: incident-summary\n"
+        "style:\n"
+        "  voice: Calm, factual, and reassuring.\n"
+        "  tone: Concise and non-alarmist.\n"
+        "  formatting_rules:\n"
+        "    - Start with the current impact.\n"
+        "    - Use bullets for mitigation steps.\n",
+        encoding="utf-8",
+    )
+
+    skill = load_skill(source)
+
+    assert skill.style == {
+        "voice": "Calm, factual, and reassuring.",
+        "tone": "Concise and non-alarmist.",
+        "formatting_rules": [
+            "Start with the current impact.",
+            "Use bullets for mitigation steps.",
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    ("style", "message"),
+    [
+        ("role: Incident commander\n", "skill.style contains unknown field"),
+        ("tone: [calm]\n", "skill.style.tone must be a string"),
+        ("formatting_rules: [3]\n", "skill.style.formatting_rules must be a list"),
+    ],
+)
+def test_load_skill_rejects_invalid_or_identity_overriding_style(
+    tmp_path: Path, style: str, message: str
+) -> None:
+    source = tmp_path / "skill.yaml"
+    source.write_text("name: incident-summary\nstyle:\n  " + style, encoding="utf-8")
+
+    with pytest.raises(ConfigError, match=message):
+        load_skill(source)
 
 
 def test_load_skill_rejects_missing_name(tmp_path: Path) -> None:

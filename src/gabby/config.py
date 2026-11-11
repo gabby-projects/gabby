@@ -368,6 +368,7 @@ class AgentDefinition:
     tools: list[str] = field(default_factory=list)
     knowledge: dict[str, Any] = field(default_factory=dict)
     instructions: str = ""
+    persona: dict[str, Any] = field(default_factory=dict)
     policies: dict[str, Any] = field(default_factory=dict)
     verification: dict[str, Any] = field(default_factory=dict)
     sandbox: SandboxDefinition | None = None
@@ -389,6 +390,7 @@ class SkillDefinition:
     dependencies: list[str] = field(default_factory=list)
     verification: list[str] = field(default_factory=list)
     triggers: list[str] = field(default_factory=list)
+    style: dict[str, Any] = field(default_factory=dict)
     source_path: Path | None = None
     version: str = "0.1.0"
     input_schema: dict[str, Any] | None = None
@@ -409,6 +411,7 @@ class ResolvedSkillDefinition:
     dependencies: tuple[str, ...]
     verification: tuple[str, ...]
     triggers: tuple[str, ...]
+    style: Mapping[str, Any]
     source_path: Path | None
     version: str = "0.1.0"
     input_schema: Mapping[str, Any] | None = None
@@ -428,6 +431,8 @@ class ResolvedAgentDefinition:
     tools: tuple[str, ...]
     knowledge: Mapping[str, Any]
     instructions: str
+    persona: Mapping[str, Any]
+    persona_prompt: str
     policies: Mapping[str, Any]
     verification: Mapping[str, Any]
     sandbox: SandboxDefinition | None
@@ -522,6 +527,7 @@ def _resolved_skill(skill: SkillDefinition) -> ResolvedSkillDefinition:
         dependencies=tuple(_split_skill_reference(value)[0] for value in skill.dependencies),
         verification=tuple(skill.verification),
         triggers=tuple(skill.triggers),
+        style=_freeze_config(skill.style),
         source_path=skill.source_path,
         version=skill.version,
         input_schema=(
@@ -619,6 +625,29 @@ def validate_skill_definition(skill: SkillDefinition) -> None:
                 raise ConfigError(
                     f"Skill metadata exceeds the {_MAX_SKILL_METADATA_BYTES}-byte limit"
                 )
+    if not isinstance(skill.style, dict):
+        raise ConfigError("skill.style must be a mapping")
+    _reject_unknown_fields(
+        skill.style,
+        "skill.style",
+        frozenset({"voice", "tone", "formatting_rules"}),
+    )
+    for field_name in ("voice", "tone"):
+        if field_name in skill.style:
+            value = skill.style[field_name]
+            if not isinstance(value, str):
+                raise ConfigError(f"skill.style.{field_name} must be a string")
+            _validate_text_bytes(f"skill.style.{field_name}", value, _MAX_SKILL_TEXT_BYTES)
+    if "formatting_rules" in skill.style:
+        rules = skill.style["formatting_rules"]
+        if not isinstance(rules, list) or any(
+            not isinstance(rule, str) or not rule.strip() for rule in rules
+        ):
+            raise ConfigError("skill.style.formatting_rules must be a list of non-empty strings")
+        for index, rule in enumerate(rules):
+            _validate_text_bytes(
+                f"skill.style.formatting_rules[{index}]", rule, _MAX_SKILL_TEXT_BYTES
+            )
     for dependency in skill.dependencies:
         _split_skill_reference(dependency)
     if skill.source_path is not None and not isinstance(skill.source_path, Path):
@@ -692,12 +721,33 @@ def resolve_agent_definition(
             "tools": definition.tools,
             "knowledge": definition.knowledge,
             "instructions": definition.instructions,
+            "persona": definition.persona,
             "policies": definition.policies,
             "verification": definition.verification,
             "output_schema": definition.output_schema,
             "sandbox": sandbox_config,
         }
     )
+    persona = frozen_config["persona"]
+    persona_sections: list[str] = []
+    for key, label in (
+        ("role", "Role"),
+        ("tone", "Tone"),
+        ("communication_style", "Communication style"),
+    ):
+        value = persona.get(key, "")
+        if value:
+            persona_sections.append(f"{label}: {value}")
+    for key, label in (
+        ("escalation_rules", "Escalation rules"),
+        ("forbidden_behaviors", "Forbidden behaviors"),
+    ):
+        values = persona.get(key, ())
+        if values:
+            persona_sections.append(label + ":\n- " + "\n- ".join(values))
+    persona_prompt = "Structured persona (behavioral guidance; policies remain authoritative):\n" + (
+        "\n".join(persona_sections) if persona_sections else ""
+    ) if persona_sections else ""
     return ResolvedAgentDefinition(
         name=frozen_config["name"],
         model=frozen_config["model"],
@@ -708,6 +758,8 @@ def resolve_agent_definition(
         tools=frozen_config["tools"],
         knowledge=frozen_config["knowledge"],
         instructions=frozen_config["instructions"],
+        persona=frozen_config["persona"],
+        persona_prompt=persona_prompt,
         policies=frozen_config["policies"],
         verification=frozen_config["verification"],
         output_schema=frozen_config["output_schema"],
@@ -806,7 +858,9 @@ def _validate_execution_config(
             }
         ),
     )
-    _reject_unknown_fields(verification, "verification", frozenset({"enabled"}))
+    _reject_unknown_fields(
+        verification, "verification", frozenset({"enabled", "persona_compliance"})
+    )
     for key in ("type", "description"):
         if key in environment and not isinstance(environment[key], str):
             raise ConfigError(f"environment.{key} must be a string")
@@ -913,6 +967,10 @@ def _validate_execution_config(
             raise ConfigError("knowledge.max_context_bytes must be a positive integer")
     if "enabled" in verification and not isinstance(verification["enabled"], bool):
         raise ConfigError("verification.enabled must be a boolean")
+    if "persona_compliance" in verification and not isinstance(
+        verification["persona_compliance"], bool
+    ):
+        raise ConfigError("verification.persona_compliance must be a boolean")
 
 
 def validate_agent_definition(definition: AgentDefinition) -> None:
@@ -944,6 +1002,7 @@ def validate_agent_definition(definition: AgentDefinition) -> None:
         ("knowledge", definition.knowledge),
         ("policies", definition.policies),
         ("verification", definition.verification),
+        ("persona", definition.persona),
     ):
         if not isinstance(mapping_value, dict):
             raise ConfigError(f"'{field_name}' must be a mapping")
@@ -965,6 +1024,26 @@ def validate_agent_definition(definition: AgentDefinition) -> None:
         definition.policies,
         definition.verification,
     )
+    _reject_unknown_fields(
+        definition.persona,
+        "persona",
+        frozenset({"role", "tone", "communication_style", "escalation_rules", "forbidden_behaviors"}),
+    )
+    for key in ("role", "tone", "communication_style"):
+        if key in definition.persona:
+            value = definition.persona[key]
+            if not isinstance(value, str):
+                raise ConfigError(f"persona.{key} must be a string")
+            _validate_text_bytes(f"persona.{key}", value, _MAX_AGENT_CONFIG_BYTES)
+    for key in ("escalation_rules", "forbidden_behaviors"):
+        if key in definition.persona:
+            values = definition.persona[key]
+            if not isinstance(values, list) or any(
+                not isinstance(item, str) or not item.strip() for item in values
+            ):
+                raise ConfigError(f"persona.{key} must be a list of non-empty strings")
+            for index, item in enumerate(values):
+                _validate_text_bytes(f"persona.{key}[{index}]", item, _MAX_AGENT_CONFIG_BYTES)
 
 
 def _validate_output_schema(
@@ -1198,6 +1277,7 @@ def load_agent(path: str | Path) -> AgentDefinition:
                 "tools",
                 "knowledge",
                 "instructions",
+                "persona",
                 "policies",
                 "verification",
                 "output_schema",
@@ -1215,6 +1295,7 @@ def load_agent(path: str | Path) -> AgentDefinition:
         tools=_strings(data.get("tools", []), "tools"),
         knowledge=data.get("knowledge", {}),
         instructions=data.get("instructions", ""),
+        persona=data.get("persona", {}),
         policies=data.get("policies", {}),
         verification=data.get("verification", {}),
         output_schema=data.get("output_schema"),
@@ -1247,6 +1328,7 @@ def load_skill(path: str | Path) -> SkillDefinition:
                 "dependencies",
                 "verification",
                 "triggers",
+                "style",
                 "input_schema",
                 "output_schema",
             }
@@ -1258,6 +1340,9 @@ def load_skill(path: str | Path) -> SkillDefinition:
     description = _string(data.get("description", ""), "skill.description")
     instructions = _load_skill_instructions(data, source)
     examples = _load_skill_examples(data, source)
+    style = data.get("style", {})
+    if not isinstance(style, dict):
+        raise ConfigError("skill.style must be a mapping")
     definition = SkillDefinition(
         name=name.strip(),
         version=_string(data.get("version", "0.1.0"), "skill.version"),
@@ -1270,6 +1355,7 @@ def load_skill(path: str | Path) -> SkillDefinition:
         dependencies=_strings(data.get("dependencies", []), "skill.dependencies"),
         verification=_strings(data.get("verification", []), "skill.verification"),
         triggers=_strings(data.get("triggers", []), "skill.triggers"),
+        style=style,
         input_schema=data.get("input_schema"),
         output_schema=data.get("output_schema"),
         source_path=source,

@@ -32,6 +32,15 @@ environment:
 instructions: |
   Be concise. Explain assumptions and report what you verified.
 
+persona:
+  role: Customer support assistant
+  tone: Calm, respectful, and direct
+  communication_style: Use plain language and ask one question at a time.
+  escalation_rules:
+    - Escalate suspected fraud to a human agent.
+  forbidden_behaviors:
+    - Never request a full payment card number.
+
 skills:
   - debugging
 
@@ -50,7 +59,20 @@ policies:
 
 verification:
   enabled: false
+  persona_compliance: false
 ```
+
+Persona fields are snapshotted at agent construction and compiled into a structured system-prompt
+section. They guide model behavior; they are not policy enforcement by themselves. For post-generation
+checking, set `verification.persona_compliance: true` and inject a `PersonaVerifier` when constructing
+`Agent`. Its `verify_persona(request, output, persona, trace)` method returns a
+`VerificationResult`; Gabby rejects the run if it raises, returns an invalid result, or reports
+`passed=False`. Persona-checked output is buffered until verification passes, including streamed
+responses. Implement the verifier with deterministic checks where possible and an independent
+review model or policy service where needed. Company rules that must constrain actions should also
+be encoded in runtime policies and tool handlers; a text verifier cannot guarantee that a model
+never generated a violating answer, and arbitrary behavioral boundaries may not be reliably
+machine-detectable.
 
 API credentials must stay outside agent configuration. Gabby rejects inline `model.api_key`,
 credential-bearing model headers, URL userinfo, and provider URL query parameters with
@@ -103,8 +125,14 @@ description: Diagnose and resolve software failures.
 instructions: |
   Reproduce the failure, inspect evidence, identify the root cause, and propose
   the smallest safe fix. State which checks were actually run.
-tools: []
 triggers: [dependency, regression, failing test]
+style:
+  voice: Calm, factual, and reassuring.
+  tone: Concise and non-alarmist.
+  formatting_rules:
+    - Start with the current impact.
+    - Use bullets for mitigation steps.
+tools: []
 input_schema:
   type: object
   properties:
@@ -121,6 +149,11 @@ output_schema:
   required: [diagnosis, evidence]
   additionalProperties: false
 ```
+
+An optional `style` block can add task-specific `voice`, `tone`, and `formatting_rules` to a skill
+package. Gabby includes these rules only when that skill is active. They refine how the agent handles
+the skill's work; they cannot replace the agent's role, escalation rules, forbidden behaviors, or
+runtime policies. Style fields guide model output and do not guarantee compliance.
 
 Skill schemas are optional runtime contracts. `input_schema` validates the `{task, context,
 memory}` request envelope when the skill activates. `output_schema` validates the agent's final
@@ -833,6 +866,46 @@ with `--model`, and select the credential environment variable with `--api-key-e
 model identifier is a placeholder that must be replaced. Initialization never overwrites an
 existing file, and generated agents declare no tools or skills; register application-owned tools
 and resources in the host before granting them to an agent.
+
+### Host context for personalization
+
+The `/v1` run and stream endpoints accept an optional typed `host_context` envelope. The host chooses
+which authenticated caller's preferences, summary, and retrieved snippets to attach on each request.
+Gabby validates and size-bounds this input, passes it to the model as untrusted reference data, and
+discards it when the run ends.
+
+```json
+{
+  "input": "Explain the timeout setting",
+  "host_context": {
+    "user_preferences": {
+      "display_name": "Sam",
+      "locale": "en-AU",
+      "response_style": "Concise; use Australian spelling",
+      "accessibility_needs": ["Avoid unexplained acronyms"]
+    },
+    "session_summary": {
+      "summary": "The user is configuring a local service.",
+      "recent_topics": ["installation", "timeouts"]
+    },
+    "rag_snippets": [
+      {"text": "The request timeout is configured in seconds.", "source": "operations.md"}
+    ]
+  }
+}
+```
+
+`user_preferences` supports `display_name`, `locale`, `timezone`, `response_style`,
+`accessibility_needs`, and scalar `custom` values. `session_summary` has required `summary`, optional
+ISO-8601 `updated_at`, and `recent_topics`. A RAG snippet has required `text` and `source`, with
+optional `title`, finite `score`, and scalar `metadata`. Unknown fields are rejected; text, list
+sizes, and the whole request are bounded. Python callers can pass a `HostContext` instance or a
+mapping to `Agent.arun()` / `Agent.astream()` or `GabbyClient.arun()` / `GabbyClient.astream()`.
+
+The host must authenticate the caller and select the matching data before submitting the request;
+`host_context` does not establish identity or tenant authorization. Treat preferences, summaries, and
+snippets as untrusted content. Snippets cannot grant tools or override runtime policies. Gabby does
+not persist this envelope or isolate tenants on the host's behalf.
 
 `gabby evaluate` runs a bounded JSON Lines regression dataset sequentially against the configured
 agent. Each case is a fresh stateless request with its own `context` and `memory`. Expectations are
