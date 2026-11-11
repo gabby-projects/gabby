@@ -71,6 +71,39 @@ def test_load_agent_accepts_structured_persona_fields(tmp_path: Path) -> None:
     assert definition.persona["forbidden_behaviors"] == ["Never request a full card number"]
 
 
+def test_load_agent_accepts_allowlisted_mcp_servers(tmp_path: Path) -> None:
+    source = tmp_path / "agent.yaml"
+    source.write_text(
+        "name: helper\nmodel:\n  provider: openai\n  model: x\n"
+        "tools: [tickets_search]\nmcp:\n  expose: true\n  servers:\n"
+        "    tickets:\n      url: https://mcp.example.test/mcp\n"
+        "      allow_tools: [search]\n",
+        encoding="utf-8",
+    )
+    definition = load_agent(source)
+    assert definition.mcp["expose"] is True
+    assert definition.mcp["servers"]["tickets"]["allow_tools"] == ["search"]
+
+
+@pytest.mark.parametrize(
+    "mcp_yaml",
+    [
+        "mcp:\n  servers:\n    remote:\n      url: http://example.test/mcp\n"
+        "      allow_tools: [search]\n",
+        "mcp:\n  servers:\n    remote:\n      url: https://example.test/mcp\n"
+        "      allow_tools: []\n",
+    ],
+)
+def test_load_agent_rejects_unsafe_or_unscoped_mcp_servers(tmp_path: Path, mcp_yaml: str) -> None:
+    source = tmp_path / "agent.yaml"
+    source.write_text(
+        "name: helper\nmodel:\n  provider: openai\n  model: x\n" + mcp_yaml,
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match="mcp.servers"):
+        load_agent(source)
+
+
 def test_load_agent_accepts_output_schema_and_programmatic_validation_matches(
     tmp_path: Path,
 ) -> None:

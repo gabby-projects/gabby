@@ -575,7 +575,45 @@ class Agent:
             ConfigError: If the file is invalid, references unavailable capabilities, or violates
                 a configured policy.
         """
-        return cls(load_agent(path), **kwargs)
+        definition = load_agent(path)
+        if definition.mcp.get("servers"):
+            raise ConfigError(
+                "Agent YAML declares MCP servers; use await Agent.from_file_mcp() to discover them"
+            )
+        return cls(definition, **kwargs)
+
+    @classmethod
+    async def from_file_mcp(cls, path: str | Path, **kwargs: Any) -> Agent:
+        """Load an agent YAML file and connect its allowlisted MCP tools.
+
+        The optional MCP dependency is loaded only when the definition declares MCP servers.
+        Remote tools are registered as regular Gabby tools and remain subject to the agent's
+        ``tools`` and ``policies.allowed_tools`` declarations.
+        """
+        definition = load_agent(path)
+        if not definition.mcp.get("servers"):
+            return cls(definition, **kwargs)
+        from .mcp import load_mcp_tools
+
+        mcp_client_factory = kwargs.pop("mcp_client_factory", None)
+        remote = await load_mcp_tools(
+            definition.mcp,
+            client_factory=mcp_client_factory,
+        )
+        undeclared = sorted(set(remote.names()) - set(definition.tools))
+        if undeclared:
+            raise ConfigError(
+                "MCP tool(s) must be included in the agent's tools list: " + ", ".join(undeclared)
+            )
+        existing = kwargs.pop("tools", None)
+        combined = ToolRegistry()
+        if existing is not None:
+            for name in existing.names():
+                combined.register(existing.get(name).snapshot())
+        for name in remote.names():
+            combined.register(remote.get(name).snapshot())
+        kwargs["tools"] = combined
+        return cls(definition, **kwargs)
 
     def _provider_from_definition(self) -> ModelProvider:
         config = self.definition.model

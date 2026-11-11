@@ -21,7 +21,7 @@ import json
 from collections.abc import AsyncGenerator, AsyncIterator, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 import httpx
 
@@ -143,6 +143,17 @@ class GabbyClient:
         self._mode: str | None = None
         self._bridge: SyncLoopBridge | None = None
         self._closed = False
+
+    def clone(self) -> GabbyClient:
+        """Create an independent client with the same connection settings and transport."""
+        return GabbyClient(
+            self._base_url,
+            unquote(self._agent_name),
+            headers=self._headers,
+            timeout=self._timeout,
+            max_response_bytes=self._max_response_bytes,
+            transport=self._transport,
+        )
 
     async def arun(
         self,

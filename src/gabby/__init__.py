@@ -120,6 +120,7 @@ from .knowledge import (
     SQLiteFTS5Store,
     VectorStore,
 )
+from .mcp import create_mcp_server, load_mcp_tools
 from .models import (
     AnthropicProvider,
     GeminiProvider,
@@ -136,6 +137,7 @@ from .models import (
     ensure_model_request_size,
     ensure_model_response_size,
 )
+from .orchestrators import crewai_tool, langgraph_node, n8n_request
 from .payload_filters import DefaultPayloadFilter, PayloadFilter, PayloadFilterError
 from .planning import (
     ExecutionPlan,
@@ -229,7 +231,16 @@ from .tools import (
     ToolErrorCode,
     ToolRegistry,
 )
-from .tracing import ExecutionTrace, TraceEvent, Tracer
+from .tracing import (
+    CompositeTracer,
+    ExecutionTrace,
+    LFTraceExporter,
+    OpenTelemetryTracer,
+    SignedAuditExporter,
+    TraceEvent,
+    Tracer,
+    create_otlp_tracer,
+)
 from .vector import SQLiteVectorStore
 from .verification import PersonaVerifier, VerificationResult, Verifier
 
@@ -379,6 +390,16 @@ __all__ = [
     "Utf8TextParser",
     "TraceEvent",
     "Tracer",
+    "CompositeTracer",
+    "LFTraceExporter",
+    "OpenTelemetryTracer",
+    "SignedAuditExporter",
+    "create_mcp_server",
+    "load_mcp_tools",
+    "langgraph_node",
+    "crewai_tool",
+    "n8n_request",
+    "create_otlp_tracer",
     "VectorStore",
     "WorkspaceMount",
     "VerificationResult",

@@ -1,0 +1,31 @@
+{
+  "name": "Gabby HTTP Request Node",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://gabby.example.com/v1/agents/your-agent/run",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { input: $json.task, context: $json.context ?? {} } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300],
+      "id": "0dbd4877-7761-4d73-a0cc-948456f8a948",
+      "name": "Run task through Gabby",
+      "credentials": {}
+    }
+  ],
+  "connections": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2e177bb5-dc91-4f27-930c-ad4c234e47bf",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

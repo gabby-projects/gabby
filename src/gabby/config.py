@@ -380,6 +380,7 @@ class AgentDefinition:
     persona: dict[str, Any] = field(default_factory=dict)
     policies: dict[str, Any] = field(default_factory=dict)
     verification: dict[str, Any] = field(default_factory=dict)
+    mcp: dict[str, Any] = field(default_factory=dict)
     sandbox: SandboxDefinition | None = None
     source_path: Path | None = None
     output_schema: dict[str, Any] | None = None
@@ -1065,9 +1066,11 @@ def validate_agent_definition(definition: AgentDefinition) -> None:
         ("policies", definition.policies),
         ("verification", definition.verification),
         ("persona", definition.persona),
+        ("mcp", definition.mcp),
     ):
         if not isinstance(mapping_value, dict):
             raise ConfigError(f"'{field_name}' must be a mapping")
+    _validate_mcp_config(definition.mcp)
     _validate_output_schema(definition.output_schema)
     skill_references = _strings(definition.skills, "skills", allow_none=False)
     if len(skill_references) > _MAX_RESOLVED_SKILLS:
@@ -1108,6 +1111,54 @@ def validate_agent_definition(definition: AgentDefinition) -> None:
                 raise ConfigError(f"persona.{key} must be a list of non-empty strings")
             for index, item in enumerate(values):
                 _validate_text_bytes(f"persona.{key}[{index}]", item, _MAX_AGENT_CONFIG_BYTES)
+
+
+def _validate_mcp_config(config: Mapping[str, Any]) -> None:
+    """Validate the explicit MCP server and exposure allowlists."""
+    _reject_unknown_fields(config, "mcp", frozenset({"servers", "expose"}))
+    expose = config.get("expose", False)
+    if not isinstance(expose, bool):
+        raise ConfigError("mcp.expose must be a boolean")
+    servers = config.get("servers", {})
+    if not isinstance(servers, Mapping):
+        raise ConfigError("mcp.servers must be a mapping")
+    if len(servers) > 32:
+        raise ConfigError("mcp.servers may contain at most 32 servers")
+    for name, server in servers.items():
+        if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", name):
+            raise ConfigError(
+                "mcp server names must use 1-48 letters, digits, underscores, or hyphens"
+            )
+        if not isinstance(server, Mapping):
+            raise ConfigError(f"mcp.servers.{name} must be a mapping")
+        _reject_unknown_fields(server, f"mcp.servers.{name}", frozenset({"url", "allow_tools"}))
+        url = server.get("url")
+        if not isinstance(url, str):
+            raise ConfigError(f"mcp.servers.{name}.url must be an HTTP(S) URL")
+        parsed = urlsplit(url)
+        host = parsed.hostname
+        if (
+            parsed.scheme not in {"http", "https"}
+            or host is None
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or (parsed.scheme == "http" and host.lower() not in {"localhost", "127.0.0.1", "::1"})
+        ):
+            raise ConfigError(f"mcp.servers.{name}.url must use HTTPS outside loopback")
+        allow_tools = server.get("allow_tools")
+        if (
+            not isinstance(allow_tools, list)
+            or not allow_tools
+            or any(
+                not isinstance(tool, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", tool)
+                for tool in allow_tools
+            )
+        ):
+            raise ConfigError(f"mcp.servers.{name}.allow_tools must be a non-empty tool-name list")
+        if len(set(allow_tools)) != len(allow_tools):
+            raise ConfigError(f"mcp.servers.{name}.allow_tools must not contain duplicates")
 
 
 def _validate_output_schema(
@@ -1348,6 +1399,7 @@ def load_agent(path: str | Path) -> AgentDefinition:
                 "persona",
                 "policies",
                 "verification",
+                "mcp",
                 "output_schema",
                 "sandbox",
             }
@@ -1366,6 +1418,7 @@ def load_agent(path: str | Path) -> AgentDefinition:
         persona=data.get("persona", {}),
         policies=data.get("policies", {}),
         verification=data.get("verification", {}),
+        mcp=data.get("mcp", {}),
         output_schema=data.get("output_schema"),
         sandbox=_sandbox_config(data.get("sandbox"), source),
         source_path=source,

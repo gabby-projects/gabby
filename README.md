@@ -97,6 +97,9 @@ Gabby is pre-1.0 alpha software. Public extension APIs may change before v1.0. L
 
 ## Open source and contributing
 
+See the [runtime integrations guide](docs/INTEGRATIONS.md) for MCP, OpenTelemetry, signed audit,
+and orchestration adapters.
+
 Gabby is maintained in the [undreamt-oss](https://github.com/undreamt-oss) organization. Contributions are welcome across runtime behavior, providers, documentation, examples, accessibility, security, and developer experience.
 
 Before contributing, read the [contributing guide](CONTRIBUTING.md), [governance](GOVERNANCE.md), and [security policy](SECURITY.md). See the [documentation index](docs/index.md) for architecture, extension contracts, operations, and release guidance.
