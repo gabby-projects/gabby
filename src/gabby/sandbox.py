@@ -47,6 +47,29 @@ class SandboxOutputLimit(SandboxError):
     """A sandbox command produced more output than Gabby will retain."""
 
 
+def _validate_ephemeral_environment(environment: dict[str, str] | None) -> dict[str, str]:
+    """Snapshot small process-scoped secrets before passing them to a sandbox exec call."""
+    if environment is None:
+        return {}
+    if not isinstance(environment, dict) or len(environment) > 32:
+        raise SandboxError("Sandbox credentials must be a bounded environment mapping")
+    result: dict[str, str] = {}
+    size = 0
+    for key, value in environment.items():
+        if (
+            not isinstance(key, str)
+            or not key.isidentifier()
+            or not isinstance(value, str)
+            or "\x00" in value
+        ):
+            raise SandboxError("Sandbox credentials contain an invalid environment value")
+        size += len(key.encode("utf-8")) + len(value.encode("utf-8"))
+        if size > 32 * 1024:
+            raise SandboxOutputLimit("Sandbox credentials exceed 32768 bytes")
+        result[key] = value
+    return result
+
+
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 MAX_FILE_BYTES = 1024 * 1024
 _WINDOWS_DEVICE_NAMES = {"con", "prn", "aux", "nul"}.union(
@@ -230,6 +253,7 @@ class SandboxSession:
             raise SandboxError("The sandbox was terminated after a previous command failure")
         if not argv or any(not isinstance(arg, str) or "\x00" in arg for arg in argv):
             raise SandboxError("Sandbox commands must be a non-empty argv of strings")
+        environment = _validate_ephemeral_environment(environment)
         try:
             result = await self.adapter.exec(
                 self.container_id,
@@ -305,6 +329,7 @@ class SandboxSession:
         timeout: float | None = None,
         command: Sequence[str] | None = None,
         max_input_bytes: int = MAX_FILE_BYTES,
+        environment: dict[str, str] | None = None,
     ) -> object:
         """Execute one of Gabby's built-in sandbox operations."""
         operation_deadline = self._operation_deadline(timeout)
@@ -319,6 +344,7 @@ class SandboxSession:
                 code,
                 max_input_bytes=max_input_bytes,
                 timeout=self._operation_remaining(operation_deadline),
+                environment=environment,
             )
         if action == "shell.run":
             argv = arguments.get("argv")
@@ -330,6 +356,7 @@ class SandboxSession:
                 argv,
                 timeout=self._operation_remaining(operation_deadline),
                 working_directory=cwd,
+                environment=environment,
             )
             return {
                 "exit_code": result.exit_code,
@@ -403,6 +430,7 @@ class SandboxSession:
         *,
         max_input_bytes: int,
         timeout: float | None = None,
+        environment: dict[str, str] | None = None,
     ) -> dict[str, object]:
         """Stage bounded source privately and execute it through the configured interpreter."""
         if self._terminated:
@@ -442,6 +470,7 @@ class SandboxSession:
                 [*command, "-I", script_path],
                 timeout=timeout,
                 working_directory=self.workspace_path,
+                environment=environment,
             )
             return {
                 "exit_code": result.exit_code,
@@ -469,6 +498,7 @@ class SandboxSession:
         *,
         max_input_bytes: int,
         timeout: float | None = None,
+        environment: dict[str, str] | None = None,
     ) -> object:
         """Run an image-provided JSON tool with its input in a temporary container file.
 
@@ -519,7 +549,9 @@ class SandboxSession:
 
         failure: BaseException | None = None
         try:
-            result = await self.exec([*command, request_path], timeout=timeout)
+            result = await self.exec(
+                [*command, request_path], timeout=timeout, environment=environment
+            )
             if result.exit_code != 0:
                 raise SandboxError("Sandboxed tool command returned a non-zero exit code")
             try:

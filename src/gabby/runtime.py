@@ -432,6 +432,48 @@ def _add_usage(total: dict[str, int | float], usage: dict[Any, Any]) -> None:
             continue
 
 
+def _usage_value(usage: Mapping[str, Any], names: tuple[str, ...]) -> int | None:
+    for name in names:
+        value = usage.get(name)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+    return None
+
+
+def _check_run_usage_limits(
+    usage: Mapping[str, int | float],
+    policies: Mapping[str, Any],
+    *,
+    require_usage: bool = False,
+) -> None:
+    """Fail closed at each provider-reported usage boundary before another run step."""
+    input_tokens = _usage_value(usage, ("prompt_tokens", "input_tokens"))
+    output_tokens = _usage_value(usage, ("completion_tokens", "output_tokens"))
+    total_tokens = _usage_value(usage, ("total_tokens",))
+    if input_tokens is None and output_tokens is None and total_tokens is None:
+        if require_usage and ("max_total_tokens" in policies or "max_cost_usd" in policies):
+            raise AgentRuntimeError("Model provider omitted token usage required by run budget")
+        return
+    if total_tokens is None and input_tokens is not None and output_tokens is not None:
+        total_tokens = input_tokens + output_tokens
+    token_limit = policies.get("max_total_tokens")
+    if token_limit is not None:
+        if total_tokens is None:
+            raise AgentRuntimeError("Model provider omitted token usage required by run budget")
+        if total_tokens > token_limit:
+            raise AgentRuntimeError(f"Agent exceeded max_total_tokens={token_limit}")
+    cost_limit = policies.get("max_cost_usd")
+    if cost_limit is not None:
+        if input_tokens is None or output_tokens is None:
+            raise AgentRuntimeError("Model provider omitted token usage required by cost budget")
+        estimated_cost = (
+            input_tokens * policies["input_cost_per_1m_tokens"]
+            + output_tokens * policies["output_cost_per_1m_tokens"]
+        ) / 1_000_000
+        if estimated_cost > cost_limit:
+            raise AgentRuntimeError(f"Agent exceeded max_cost_usd={cost_limit}")
+
+
 async def _invoke(callback: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     """Run async extensions directly and sync extensions off the event loop."""
     if inspect.iscoroutinefunction(callback):
@@ -514,7 +556,7 @@ class Runtime:
         self._sandbox_session: SandboxSession | None = None
         self._active_output_validators: tuple[tuple[str, Any], ...] = ()
 
-    def _system_message(self, active_skills: list[Any]) -> str:
+    def _system_message(self, active_skills: list[Any], principal: Principal | None = None) -> str:
         definition = self.agent.definition
         parts = ["You are a specialized stateless agent."]
         if definition.description:
@@ -536,6 +578,21 @@ class Runtime:
             )
         if definition.persona_prompt:
             parts.append(definition.persona_prompt)
+        scope_rules = definition.policies.get("scope_rules", {})
+        scoped_persona = [
+            rule["persona_instructions"]
+            for scope, rule in sorted(scope_rules.items())
+            if principal is not None
+            and scope in principal.scopes
+            and isinstance(rule, Mapping)
+            and isinstance(rule.get("persona_instructions"), str)
+            and rule["persona_instructions"].strip()
+        ]
+        if scoped_persona:
+            parts.append(
+                "Verified caller-scope persona guidance (configured by the host; does not grant "
+                "tools or override runtime policy):\n" + "\n".join(scoped_persona)
+            )
         if self.agent.planner is not None:
             parts.append(
                 "An optional model-generated execution plan may be present as advisory guidance. "
@@ -928,6 +985,7 @@ class Runtime:
         selection_usage: dict[str, int | float] = {}
         _add_usage(selection_usage, selection.usage)
         _add_usage(total_usage, selection_usage)
+        _check_run_usage_limits(total_usage, policies)
         selection_duration_ms = (time.perf_counter() - selection_started) * 1000
         if selection.model is not None:
             await self._record_trace(
@@ -1051,7 +1109,10 @@ class Runtime:
                 raise AgentRuntimeError("Persona compliance verification requires persona settings")
 
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self._system_message(active_skills)}
+            {
+                "role": "system",
+                "content": self._system_message(active_skills, request.principal),
+            }
         ]
         if request.context or request.memory:
             messages.append(
@@ -1285,6 +1346,7 @@ class Runtime:
             planning_usage: dict[str, int | float] = {}
             _add_usage(planning_usage, planning_result.usage)
             _add_usage(total_usage, planning_usage)
+            _check_run_usage_limits(total_usage, policies)
             planning_duration_ms = (time.perf_counter() - planning_started) * 1000
             if planning_result.model is not None:
                 await self._record_trace(
@@ -1417,6 +1479,7 @@ class Runtime:
                 duration_ms=(time.perf_counter() - model_call_started) * 1000,
             )
             _add_usage(total_usage, response.usage)
+            _check_run_usage_limits(total_usage, policies, require_usage=True)
             if not response.tool_calls:
                 output = response.content or ""
                 await self._record_trace(
@@ -1722,21 +1785,29 @@ class Runtime:
                             )
                         if tool.sandbox_action == "tool.execute":
                             assert tool.sandbox_command is not None
+                            credential_environment = await self._resolve_sandbox_credentials(
+                                name, request.principal, trace.trace_id, deadline
+                            )
                             tool_result = await self._sandbox_session.invoke_tool(
                                 tool.sandbox_command,
                                 arguments,
                                 max_input_bytes=tool.max_input_bytes,
                                 timeout=tool_timeout,
+                                environment=credential_environment,
                             )
                         else:
                             if tool.sandbox_action == "python.run":
                                 assert tool.sandbox_command is not None
+                                credential_environment = await self._resolve_sandbox_credentials(
+                                    name, request.principal, trace.trace_id, deadline
+                                )
                                 tool_result = await self._sandbox_session.invoke(
                                     tool.sandbox_action,
                                     arguments,
                                     timeout=tool_timeout,
                                     command=tool.sandbox_command,
                                     max_input_bytes=tool.max_input_bytes,
+                                    environment=credential_environment,
                                 )
                             else:
                                 tool_result = await self._sandbox_session.invoke(
@@ -2119,6 +2190,46 @@ class Runtime:
                     event_sink=event_sink,
                 )
         raise AgentRuntimeError(f"{purpose} retry loop terminated unexpectedly")
+
+    async def _resolve_sandbox_credentials(
+        self, tool_name: str, principal: Principal | None, run_id: str, deadline: float
+    ) -> dict[str, str]:
+        """Resolve bounded ephemeral credentials without exposing them to traces or model input."""
+        provider = self.agent.credential_provider
+        if provider is None:
+            return {}
+        try:
+            result = provider.resolve(tool_name=tool_name, principal=principal, run_id=run_id)
+            if not inspect.isawaitable(result):
+                raise TypeError
+            credentials = await asyncio.wait_for(
+                result, timeout=max(0.001, deadline - time.perf_counter())
+            )
+        except Exception as exc:
+            raise ToolError(
+                "Scoped credentials could not be resolved", code=ToolErrorCode.TOOL_UNAVAILABLE
+            ) from exc
+        if not isinstance(credentials, Mapping) or len(credentials) > 32:
+            raise ToolError("Scoped credentials are invalid", code=ToolErrorCode.TOOL_UNAVAILABLE)
+        snapshot: dict[str, str] = {}
+        size = 0
+        for key, value in credentials.items():
+            if (
+                not isinstance(key, str)
+                or not key.isidentifier()
+                or not isinstance(value, str)
+                or "\x00" in value
+            ):
+                raise ToolError(
+                    "Scoped credentials are invalid", code=ToolErrorCode.TOOL_UNAVAILABLE
+                )
+            size += len(key.encode("utf-8")) + len(value.encode("utf-8"))
+            if size > 32 * 1024:
+                raise ToolError(
+                    "Scoped credentials exceed the size limit", code=ToolErrorCode.TOOL_UNAVAILABLE
+                )
+            snapshot[key] = value
+        return snapshot
 
     async def _record_trace(
         self,

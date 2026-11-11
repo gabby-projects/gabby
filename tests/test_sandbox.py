@@ -261,6 +261,7 @@ async def test_sandbox_session_runs_json_tool_and_removes_its_request_file(tmp_p
         def __init__(self) -> None:
             super().__init__()
             self.commands: list[tuple[str, ...]] = []
+            self.command_environments: list[dict[str, str] | None] = []
             self.request_mode: int | None = None
 
         async def exec(
@@ -273,6 +274,7 @@ async def test_sandbox_session_runs_json_tool_and_removes_its_request_file(tmp_p
             environment: dict[str, str] | None = None,
         ) -> SandboxCommandResult:
             self.commands.append(tuple(argv))
+            self.command_environments.append(environment)
             if argv[0] == "classify-document":
                 request = Path(tool_input_dir, Path(argv[-1]).name)
                 self.request_mode = request.stat().st_mode & 0o777
@@ -293,13 +295,17 @@ async def test_sandbox_session_runs_json_tool_and_removes_its_request_file(tmp_p
     )
 
     result = await session.invoke_tool(
-        ("classify-document",), {"text": "Invoice overdue"}, max_input_bytes=1024
+        ("classify-document",),
+        {"text": "Invoice overdue"},
+        max_input_bytes=1024,
+        environment={"TASK_TOKEN": "short-lived-secret"},
     )
 
     assert result == {"category": "billing"}
     assert len(adapter.commands) == 1
     assert adapter.commands[0][0] == "classify-document"
     assert adapter.commands[0][1].startswith("/tmp/gabby-tool-input/gabby-tool-")
+    assert adapter.command_environments == [{"TASK_TOKEN": "short-lived-secret"}]
     if os.name == "posix":
         assert adapter.request_mode == 0o444
     assert list(tool_input_dir.iterdir()) == []
