@@ -45,7 +45,7 @@ def _definition(name: str, *, tools: list[str] | None = None) -> AgentDefinition
         name=name,
         model={"provider": "test", "model": name},
         tools=tools or [],
-        policies={"max_steps": 4, "timeout_seconds": 5},
+        policies={"max_steps": 4, "timeout_seconds": 5, "require_sandbox": False},
     )
 
 

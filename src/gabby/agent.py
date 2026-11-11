@@ -19,7 +19,7 @@ import asyncio
 import json
 import math
 import time
-from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
@@ -48,6 +48,7 @@ from .config import (
     validate_skill_definition,
 )
 from .environment import Environment, ResolvedEnvironment
+from .filtered_provider import FilteredModelProvider
 from .host_context import HostContext
 from .knowledge import Retriever
 from .models import (
@@ -58,6 +59,7 @@ from .models import (
     OllamaProvider,
     OpenAICompatibleProvider,
 )
+from .payload_filters import PayloadFilter, validate_payload_filters
 from .planning import ModelPlanner, Planner
 from .runtime import AgentStreamEvent, ExecutionResult, RunRequest, Runtime
 from .sandbox import EngineAdapter
@@ -158,11 +160,13 @@ class Agent:
         retriever: Retriever | None = None,
         verifier: Verifier | None = None,
         persona_verifier: PersonaVerifier | None = None,
+        payload_filters: Sequence[PayloadFilter] | None = None,
         environment: Environment | None = None,
         policy_engine_factory: PolicyEngineFactory | None = None,
         sandbox_adapter: EngineAdapter | None = None,
         skill_registry: Mapping[str, SkillDefinition] | None = None,
         skill_trust_policy: SkillTrustPolicy | None = None,
+        allow_unsigned_skills: bool = False,
         skill_revocation_checker: SkillRevocationChecker | None = None,
         skill_revocation_timeout_seconds: float = 5.0,
         skill_revocation_poll_interval_seconds: float = 1.0,
@@ -209,6 +213,36 @@ class Agent:
             raise ConfigError("skill_revocation_poll_interval_seconds must be from 0.1 through 60")
         if skill_trust_policy is not None and not isinstance(skill_trust_policy, SkillTrustPolicy):
             raise ConfigError("skill_trust_policy must be a SkillTrustPolicy")
+        if definition.sandbox is not None and definition.sandbox.adapter == "custom":
+            if sandbox_adapter is None:
+                raise ConfigError(
+                    "sandbox.adapter='custom' requires an injected EngineAdapter via "
+                    "Agent(sandbox_adapter=...)"
+                )
+            required_adapter_methods = (
+                "daemon_os",
+                "validate_windows_sandbox_support",
+                "image_os",
+                "pull_image",
+                "start_container",
+                "exec",
+                "read_archive",
+                "write_archive",
+                "remove_container",
+                "aclose",
+            )
+            missing_adapter_methods = [
+                name
+                for name in required_adapter_methods
+                if not callable(getattr(sandbox_adapter, name, None))
+            ]
+            if missing_adapter_methods:
+                raise ConfigError(
+                    "Custom sandbox adapter is missing required methods: "
+                    + ", ".join(missing_adapter_methods)
+                )
+        if not isinstance(allow_unsigned_skills, bool):
+            raise ConfigError("allow_unsigned_skills must be a boolean")
         if skill_revocation_checker is not None:
             if skill_trust_policy is None:
                 raise ConfigError("skill_revocation_checker requires skill_trust_policy")
@@ -231,7 +265,20 @@ class Agent:
                         f"Skill {source_skill.name!r}@{source_skill.version} "
                         f"failed the host trust policy: {exc}"
                     ) from exc
+        elif not allow_unsigned_skills:
+            for source_skill in loaded_skills:
+                source_path = source_skill.source_path
+                if (
+                    source_path is not None
+                    and (source_path.parent / ".gabby-install.json").exists()
+                ):
+                    raise ConfigError(
+                        f"Installed skill {source_skill.name!r} requires a host SkillTrustPolicy "
+                        "with trusted Ed25519 keys; pass allow_unsigned_skills=True only for "
+                        "a deliberate local trust override"
+                    )
         self.skill_trust_policy = skill_trust_policy
+        self.allow_unsigned_skills = allow_unsigned_skills
         self.skill_revocation_checker = skill_revocation_checker
         self.skill_revocation_timeout_seconds = float(skill_revocation_timeout_seconds)
         self.skill_revocation_poll_interval_seconds = float(skill_revocation_poll_interval_seconds)
@@ -333,6 +380,7 @@ class Agent:
         if self.definition.verification.get("enabled", False) and verifier is None:
             raise ConfigError("Verification is enabled but no verifier was supplied")
         self._owns_model = model is None
+        self.payload_filters = validate_payload_filters(payload_filters)
         self.model = model or self._provider_from_definition()
         self.retriever = retriever
         self.verifier = verifier
@@ -350,6 +398,12 @@ class Agent:
         ):
             raise ConfigError("policies.max_model_request_bytes must be a positive integer")
         self.max_model_request_bytes = max_model_request_bytes
+        self._model_provider = FilteredModelProvider(
+            self.model,
+            self.payload_filters,
+            purpose="reasoning",
+            max_request_bytes=max_model_request_bytes,
+        )
         max_model_response_bytes = self.definition.policies.get(
             "max_model_response_bytes", DEFAULT_MAX_MODEL_RESPONSE_BYTES
         )
@@ -366,6 +420,12 @@ class Agent:
         self.skill_selector = (
             replace(
                 selected_skill_selector,
+                provider=FilteredModelProvider(
+                    selected_skill_selector.provider,
+                    self.payload_filters,
+                    purpose="skill_selection",
+                    max_request_bytes=max_model_request_bytes,
+                ),
                 max_model_request_bytes=max_model_request_bytes,
                 max_model_response_bytes=max_model_response_bytes,
                 global_instructions=self.global_instructions,
@@ -377,6 +437,12 @@ class Agent:
         self.planner = (
             replace(
                 planner,
+                provider=FilteredModelProvider(
+                    planner.provider,
+                    self.payload_filters,
+                    purpose="planning",
+                    max_request_bytes=max_model_request_bytes,
+                ),
                 max_model_request_bytes=max_model_request_bytes,
                 max_model_response_bytes=max_model_response_bytes,
                 global_instructions=self.global_instructions,
@@ -827,6 +893,9 @@ class Agent:
         principal: Principal | None = None,
         event_sink: Callable[[AgentStreamEvent], Awaitable[None]] | None = None,
     ) -> ExecutionResult:
+        # Keep the public provider attribute replaceable for host instrumentation and tests while
+        # ensuring calls continue through the configured provider-boundary filters.
+        self._model_provider._provider = self.model
         if principal is not None and not isinstance(principal, Principal):
             raise TypeError("principal must be a gabby.Principal or None")
         request = RunRequest(

@@ -98,6 +98,7 @@ async def run_example() -> str:
                 "allowed_permissions": ["database:read"],
                 "max_steps": 3,
                 "timeout_seconds": 5,
+                "require_sandbox": False,
             },
         )
         async with Agent(definition, model=ExampleModel(), environment=environment) as agent:

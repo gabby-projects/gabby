@@ -80,10 +80,13 @@ def make_agent(
     approval_handler: Any | None = None,
     output_schema: dict[str, Any] | None = None,
 ) -> Agent:
+    effective_policies = {"max_steps": 4, "timeout_seconds": 2, "require_sandbox": False}
+    if policies is not None:
+        effective_policies.update(policies)
     definition = AgentDefinition(
         name="test-agent",
         model={"provider": "fake", "model": "test-model"},
-        policies=policies or {"max_steps": 4, "timeout_seconds": 2},
+        policies=effective_policies,
         tools=declared_tools or [],
         output_schema=output_schema,
     )
@@ -575,6 +578,7 @@ async def test_environment_resources_are_injected_only_into_opted_in_tools() -> 
             "max_steps": 2,
             "timeout_seconds": 2,
             "allowed_tools": ["query_database"],
+            "require_sandbox": False,
         },
     )
     agent = Agent(

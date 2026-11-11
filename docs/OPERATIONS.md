@@ -100,7 +100,7 @@ alongside runtime public keys:
 
 ```sh
 gabby skill verify ./support-review.gabskill --trusted-key-dir /etc/gabby/trusted-skill-publishers
-gabby skill install ./support-review.gabskill --registry ./skills --require-signature \
+gabby skill install ./support-review.gabskill --registry ./skills \
   --trusted-key-dir /etc/gabby/trusted-skill-publishers
 gabby skill audit --registry ./skills --trusted-key-dir /etc/gabby/trusted-skill-publishers
 ```

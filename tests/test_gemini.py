@@ -400,6 +400,7 @@ async def test_gemini_agent_stream_round_trips_tool_call_context(
                 "allowed_tools": ["lookup"],
                 "max_steps": 2,
                 "timeout_seconds": 5,
+                "require_sandbox": False,
             },
         ),
         model=provider,

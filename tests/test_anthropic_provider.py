@@ -379,7 +379,7 @@ async def test_agent_executes_anthropic_tool_cycle_statelessly(
         name="anthropic-test",
         model={"provider": "anthropic", "model": "claude-test"},
         tools=["lookup"],
-        policies={"max_steps": 3, "allowed_tools": ["lookup"]},
+        policies={"max_steps": 3, "allowed_tools": ["lookup"], "require_sandbox": False},
     )
     agent = Agent(definition, tools=tools)
     try:

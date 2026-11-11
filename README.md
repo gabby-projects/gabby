@@ -56,7 +56,7 @@ An agent definition composes a model, environment, skills, tools, knowledge sour
 |---|---|
 | Execution | Async-first agent loop, sync wrappers, bounded steps and tool calls, deadlines, cancellation, optional planning and retries |
 | Models | OpenAI-compatible, Ollama, Hugging Face Inference Providers, Anthropic, Gemini |
-| Skills | Reusable, composable skill definitions, dependency resolution, package and registry workflows, optional Ed25519 publisher signatures |
+| Skills | Reusable, composable skill definitions, dependency resolution, package and registry workflows, Ed25519 publisher signature verification required by default |
 | Tools and policies | Schema-validated tools, explicit permissions, approval hooks, bounded results, runtime policy enforcement |
 | Isolation | Optional per-run Docker or Podman sandboxing for supported shell/filesystem tools; configuration and host determine the effective boundary |
 | Knowledge | Bounded plain-text and Markdown ingestion, SQLite FTS5 and vector stores, hybrid retrieval contracts, pluggable embeddings and reranking |

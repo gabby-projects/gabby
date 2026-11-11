@@ -252,6 +252,7 @@ class SandboxDefinition:
     image: str
     keepalive_argv: tuple[str, ...]
     adapter: str = "cli"
+    runtime: str | None = None
     workspace: WorkspaceMount | None = None
     cpus: float = 2.0
     memory_bytes: int = 2 * 1024**3
@@ -263,8 +264,8 @@ class SandboxDefinition:
     user: str = DEFAULT_SANDBOX_USER
 
     def __post_init__(self) -> None:
-        if self.engine not in ("docker", "podman"):
-            raise ConfigError("sandbox.engine must be 'docker' or 'podman'")
+        if self.engine not in ("docker", "podman", "custom"):
+            raise ConfigError("sandbox.engine must be 'docker', 'podman', or 'custom'")
         if not isinstance(self.image, str) or not self.image.strip():
             raise ConfigError("sandbox.image must be a non-empty image reference")
         image = self.image.strip()
@@ -283,8 +284,16 @@ class SandboxDefinition:
                 "sandbox.image must end with @sha256:<64 hexadecimal characters> "
                 "when require_image_digest is true"
             )
-        if self.adapter not in ("cli", "api"):
-            raise ConfigError("sandbox.adapter must be 'cli' or 'api'")
+        if self.adapter not in ("cli", "api", "custom"):
+            raise ConfigError("sandbox.adapter must be 'cli', 'api', or 'custom'")
+        if (self.engine == "custom") != (self.adapter == "custom"):
+            raise ConfigError("custom sandbox engines require adapter='custom'")
+        if self.runtime is not None and (
+            self.engine not in ("docker", "podman")
+            or not isinstance(self.runtime, str)
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", self.runtime)
+        ):
+            raise ConfigError("sandbox.runtime must be a valid Docker or Podman runtime name")
         if self.workspace is not None and not isinstance(self.workspace, WorkspaceMount):
             raise ConfigError("sandbox.workspace must be a WorkspaceMount or None")
         if (
@@ -1130,6 +1139,7 @@ def _sandbox_config(value: Any, source: Path) -> SandboxDefinition | None:
                 "engine",
                 "image",
                 "adapter",
+                "runtime",
                 "keepalive_argv",
                 "workspace",
                 "resources",
@@ -1144,12 +1154,14 @@ def _sandbox_config(value: Any, source: Path) -> SandboxDefinition | None:
     image = value.get("image")
     adapter = value.get("adapter", "cli")
     keepalive = value.get("keepalive_argv")
-    if engine not in ("docker", "podman"):
-        raise ConfigError("sandbox.engine must be 'docker' or 'podman'")
+    if engine not in ("docker", "podman", "custom"):
+        raise ConfigError("sandbox.engine must be 'docker', 'podman', or 'custom'")
     if not isinstance(image, str) or not image.strip():
         raise ConfigError("sandbox.image must be a non-empty image reference")
-    if adapter not in ("cli", "api"):
-        raise ConfigError("sandbox.adapter must be 'cli' or 'api'")
+    if adapter not in ("cli", "api", "custom"):
+        raise ConfigError("sandbox.adapter must be 'cli', 'api', or 'custom'")
+    if (engine == "custom") != (adapter == "custom"):
+        raise ConfigError("custom sandbox engines require adapter='custom'")
     if (
         not isinstance(keepalive, list)
         or not keepalive
@@ -1247,6 +1259,7 @@ def _sandbox_config(value: Any, source: Path) -> SandboxDefinition | None:
         image=image.strip(),
         keepalive_argv=tuple(keepalive),
         adapter=adapter,
+        runtime=value.get("runtime"),
         workspace=workspace,
         cpus=float(cpus),
         memory_bytes=memory_bytes,

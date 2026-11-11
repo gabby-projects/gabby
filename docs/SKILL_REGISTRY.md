@@ -53,15 +53,15 @@ Review package metadata and file digests without installing it into a skill regi
 ```sh
 gabby skill inspect ./dist/triage-1.2.0.gabskill
 gabby skill inspect ./dist/triage-1.2.0.gabskill \
-  --trusted-key-dir ./trusted-publishers --require-signature
+  --trusted-key-dir ./trusted-publishers
 ```
 
 The command emits bounded JSON with the validated skill ID, version, description, declared tools,
 knowledge references, dependencies, verification labels, archive digest, and package file paths,
 sizes, and digests. It validates and extracts only in private temporary storage; instructions and
-examples are not returned. Without trusted keys, a present signature is reported but not
-authenticated. Use `--require-signature` with the publisher trust map when the package must be
-authenticated. A trusted signature proves which configured key signed the archive; it does not
+examples are not returned. Trusted keys are required and the detached signature must verify before
+metadata is returned. Use `--allow-unsigned` only when inspecting a local development package. A
+trusted signature proves which configured key signed the archive; it does not
 make the skill's instructions safe or authorize its declared tools.
 
 Publishers create and sign immutable artifacts locally:

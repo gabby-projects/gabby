@@ -36,14 +36,24 @@ import gabby.skill_signing as signing_module
 from gabby import (
     SkillPackageError,
     audit_skill_registry,
-    inspect_skill_package,
-    install_skill,
     pack_skill,
     sign_skill_package,
     uninstall_skill,
     verify_skill_package_signature,
 )
 from gabby.config import load_skill
+
+
+def install_skill(package: str | Path, registry: str | Path, **kwargs: Any) -> Any:
+    """Keep archive-hardening tests focused on package validation unless trust is under test."""
+    kwargs.setdefault("require_signature", False)
+    return package_module.install_skill(package, registry, **kwargs)
+
+
+def inspect_skill_package(package: str | Path, **kwargs: Any) -> Any:
+    """Keep capability inspection tests unsigned unless signature behavior is under test."""
+    kwargs.setdefault("require_signature", False)
+    return package_module.inspect_skill_package(package, **kwargs)
 
 
 def _rewrite_package_manifest(
@@ -139,6 +149,8 @@ def test_skill_schemas_survive_package_inspection_and_installation(tmp_path: Pat
     archive = tmp_path / "triage.gabskill"
     pack_skill(source, archive)
 
+    with pytest.raises(SkillPackageError, match="sign"):
+        package_module.install_skill(archive, tmp_path / "signature-required")
     inspection = inspect_skill_package(archive)
     installed = install_skill(archive, tmp_path / "registry")
     loaded = load_skill(installed.path / "skill.yaml")
@@ -165,6 +177,8 @@ def test_inspect_skill_package_reports_capabilities_and_signature_state(tmp_path
     archive = tmp_path / "source-check.gabskill"
     package = pack_skill(source, archive)
 
+    with pytest.raises(SkillPackageError, match="signature"):
+        package_module.inspect_skill_package(archive)
     unsigned = inspect_skill_package(archive)
     assert unsigned.name == "research/source-check"
     assert unsigned.version == "1.2.3"

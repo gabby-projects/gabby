@@ -169,9 +169,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     _add_trusted_key_source_options(install)
     install.add_argument(
+        "--allow-unsigned",
+        action="store_true",
+        help="Install an unsigned package for development; signatures are required by default",
+    )
+    install.add_argument(
         "--require-signature",
         action="store_true",
-        help="Require an Ed25519 signature from one of the supplied trusted keys",
+        help="Deprecated compatibility flag; signatures are required by default",
     )
     sign = skill_actions.add_parser("sign", help="Sign a skill archive using a key from the host")
     sign.add_argument("archive", type=Path, help="Local .gabskill archive")
@@ -193,9 +198,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     inspect.add_argument("archive", type=Path, help="Local .gabskill archive")
     inspect.add_argument(
+        "--allow-unsigned",
+        action="store_true",
+        help="Inspect an unsigned package for development; signatures are required by default",
+    )
+    inspect.add_argument(
         "--require-signature",
         action="store_true",
-        help="Require a signature trusted by the supplied publisher keys",
+        help="Deprecated compatibility flag; signatures are required by default",
     )
     _add_trusted_key_source_options(inspect)
     audit = skill_actions.add_parser(
@@ -492,12 +502,12 @@ def main(argv: list[str] | None = None) -> int:
                 trusted_keys = _resolve_trusted_skill_keys(
                     args.trusted_key,
                     args.trusted_key_dir,
-                    required=args.require_signature,
+                    required=not args.allow_unsigned,
                 )
                 inspection = inspect_skill_package(
                     args.archive,
                     trusted_keys=trusted_keys,
-                    require_signature=args.require_signature,
+                    require_signature=not args.allow_unsigned,
                 )
                 print(
                     json.dumps(
@@ -563,12 +573,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Uninstalled {args.name}@{args.version} from {args.registry}")
             else:
                 install_trusted_keys = _resolve_trusted_skill_keys(
-                    args.trusted_key, args.trusted_key_dir, required=args.require_signature
+                    args.trusted_key, args.trusted_key_dir, required=not args.allow_unsigned
                 )
                 package = install_skill(
                     args.archive,
                     args.registry,
-                    require_signature=args.require_signature,
+                    require_signature=not args.allow_unsigned,
                     trusted_keys=install_trusted_keys,
                     signature_path=args.signature,
                 )

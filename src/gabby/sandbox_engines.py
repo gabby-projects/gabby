@@ -482,6 +482,8 @@ class ContainerCLIAdapter:
             "--memory",
             str(spec.memory_bytes),
         ]
+        if spec.runtime is not None:
+            args.extend(["--runtime", spec.runtime])
         if spec.image_os == "windows":
             args.extend(["--isolation", "hyperv", "--cpu-count", str(int(spec.cpus))])
         else:
@@ -798,6 +800,8 @@ class ContainerAPIAdapter:
             "Memory": spec.memory_bytes,
             "RestartPolicy": {"Name": "no"},
         }
+        if spec.runtime is not None:
+            host_config["Runtime"] = spec.runtime
         container_config: dict[str, Any] = {}
         if spec.image_os == "linux":
             container_config["User"] = spec.user

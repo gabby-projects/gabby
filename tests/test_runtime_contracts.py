@@ -77,13 +77,16 @@ def _agent(
     policy_engine_factory: Any = None,
     global_instructions: str = "",
 ) -> Agent:
+    effective_policies = {"max_steps": 4, "timeout_seconds": 1, "require_sandbox": False}
+    if policies is not None:
+        effective_policies.update(policies)
     definition = AgentDefinition(
         name="contract-agent",
         description="A contract test agent",
         model={"provider": "fake", "model": "model-v1", "temperature": 0.2},
         instructions=instructions,
         persona={} if persona is None else persona,
-        policies=policies or {"max_steps": 4, "timeout_seconds": 1},
+        policies=effective_policies,
         knowledge=knowledge or {},
         verification=verification or {},
         tools=tool_names or [],
@@ -1314,7 +1317,7 @@ async def test_skill_selector_cannot_activate_unknown_or_duplicate_skills(
 
 
 @pytest.mark.asyncio
-async def test_require_sandbox_rejects_host_trusted_tools_before_model_call() -> None:
+async def test_sandbox_is_required_by_default_for_host_trusted_tools() -> None:
     tools = ToolRegistry()
     tools.register(
         Tool(
@@ -1326,12 +1329,13 @@ async def test_require_sandbox_rejects_host_trusted_tools_before_model_call() ->
         )
     )
     model = SequenceModel(ModelResponse(content="unused"))
-    agent = _agent(
-        model,
-        policies={"max_steps": 4, "timeout_seconds": 1, "require_sandbox": True},
-        tools=tools,
-        tool_names=["host_action"],
+    definition = AgentDefinition(
+        name="secure-default-agent",
+        model={"provider": "fake", "model": "model-v1"},
+        policies={"max_steps": 4, "timeout_seconds": 1},
+        tools=["host_action"],
     )
+    agent = Agent(definition, model=model, tools=tools)
 
     with pytest.raises(AgentRuntimeError, match="Policy requires sandboxed execution"):
         await agent.arun("run the action")
