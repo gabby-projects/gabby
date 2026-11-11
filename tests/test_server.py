@@ -188,7 +188,7 @@ def make_agent(model: FakeModel | None = None) -> Agent:
     definition = AgentDefinition(
         name="test-agent",
         model={"provider": "fake", "model": "test-model"},
-        policies={"max_steps": 1, "timeout_seconds": 2},
+        policies={"max_steps": 1, "timeout_seconds": 2, "require_sandbox": False},
     )
     return Agent(definition, model=model if model is not None else FakeModel())
 
@@ -1942,7 +1942,12 @@ async def test_authenticated_principal_reaches_tool_approval_outside_model_conte
         name="approval-agent",
         model={"provider": "test", "model": "approval-model"},
         tools=["publish"],
-        policies={"max_steps": 2, "timeout_seconds": 2, "allowed_tools": ["publish"]},
+        policies={
+            "max_steps": 2,
+            "timeout_seconds": 2,
+            "allowed_tools": ["publish"],
+            "require_sandbox": False,
+        },
     )
     app = create_app(
         Agent(definition, model=model, tools=tools, approval_handler=Approval()),

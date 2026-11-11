@@ -137,7 +137,8 @@ class SkillTrustPolicy:
 
     This policy is supplied by the host, not agent YAML. Its public keys and revocation set are
     snapshotted at construction, so edits to a caller-owned mapping cannot change an existing
-    agent's trust decision. Local unsigned skills remain available when no policy is supplied.
+    agent's trust decision. Uninstalled local skill directories remain available without a policy;
+    installed package directories require this policy unless the host opts into unsigned skills.
     """
 
     trusted_keys: Mapping[str, bytes]

@@ -16,10 +16,75 @@
 from __future__ import annotations
 
 import math
+import re
+from collections.abc import Callable
+from typing import Any
 
 from .tools import Tool
 
 _MAX_CODE_BYTES = 1024 * 1024
+_HANDLER_REFERENCE = re.compile(r"[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+def sandboxed_python_tool(
+    *,
+    name: str,
+    handler: str | Callable[..., Any],
+    parameters: dict[str, Any],
+    output_schema: dict[str, Any],
+    description: str,
+    executable: str = "python3",
+    max_input_bytes: int = 256 * 1024,
+    max_result_bytes: int = 1024 * 1024,
+    timeout_seconds: float = 30,
+) -> Tool:
+    """Register an importable Python handler that executes inside the per-run sandbox.
+
+    The handler must be importable from the configured sandbox image. Pass a ``module:function``
+    reference or a top-level Python function; closures and local functions are rejected. The host
+    never executes the handler in its own process. The image must include both Gabby and the
+    handler's package.
+    """
+    if isinstance(handler, str):
+        reference = handler
+    elif callable(handler):
+        module = getattr(handler, "__module__", "")
+        qualified_name = getattr(handler, "__qualname__", "")
+        if "." in qualified_name or "<locals>" in qualified_name:
+            raise ValueError("handler must be a top-level importable Python function")
+        reference = f"{module}:{qualified_name}"
+    else:
+        raise TypeError("handler must be a module:function reference or importable function")
+    if _HANDLER_REFERENCE.fullmatch(reference) is None:
+        raise ValueError("handler must use module:function syntax")
+    if not isinstance(executable, str) or not executable or "\x00" in executable:
+        raise ValueError("executable must be a non-empty interpreter command")
+    for key, value, maximum in (
+        ("max_input_bytes", max_input_bytes, 1024 * 1024),
+        ("max_result_bytes", max_result_bytes, 1024 * 1024),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
+            raise ValueError(f"{key} must be from 1 through {maximum}")
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, (int, float))
+        or not math.isfinite(timeout_seconds)
+        or not 0.01 <= timeout_seconds <= 3600
+    ):
+        raise ValueError("timeout_seconds must be finite and between 0.01 and 3600 seconds")
+    return Tool(
+        name=name,
+        description=description,
+        parameters=parameters,
+        output_schema=output_schema,
+        timeout_seconds=float(timeout_seconds),
+        max_input_bytes=max_input_bytes,
+        max_result_bytes=max_result_bytes,
+        permissions=("sandbox:python-handler",),
+        sandbox_action="tool.execute",
+        execution="sandboxed",
+        sandbox_command=(executable, "-I", "-m", "gabby.tool_worker", reference),
+    )
 
 
 def python_run_tool(

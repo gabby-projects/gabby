@@ -1568,6 +1568,7 @@ async def test_cli_adapter_uses_network_and_resource_boundaries(tmp_path: Path) 
         2 * 1024**3,
         256,
         user="1200:1300",
+        runtime="runsc",
     )
     assert await adapter.start_container(spec, timeout=2) == "container-id"
     command = adapter.calls[0]
@@ -1576,6 +1577,7 @@ async def test_cli_adapter_uses_network_and_resource_boundaries(tmp_path: Path) 
     assert command[command.index("--user") + 1] == "1200:1300"
     assert "--pids-limit" in command and "256" in command
     assert "--read-only" in command and "--cap-drop" in command
+    assert command[command.index("--runtime") + 1] == "runsc"
     assert any(item.startswith("type=bind,source=") for item in command)
 
 
@@ -1662,6 +1664,7 @@ async def test_api_adapter_runs_container_and_exec_with_closed_network(tmp_path:
             assert host["NetworkMode"] == "none"
             assert host["PidsLimit"] == 256
             assert host["ReadonlyRootfs"] is True
+            assert host["Runtime"] == "runsc"
             return httpx.Response(201, json={"Id": "api-container"})
         if path.endswith("/containers/api-container/start"):
             return httpx.Response(204)
@@ -1695,6 +1698,7 @@ async def test_api_adapter_runs_container_and_exec_with_closed_network(tmp_path:
         2 * 1024**3,
         256,
         user="1200:1300",
+        runtime="runsc",
     )
     container_id = await adapter.start_container(spec, timeout=2)
     result = await adapter.exec(container_id, ["echo", "ok"], timeout=2)

@@ -113,14 +113,14 @@ def inspect_skill_package(
     package: str | Path,
     *,
     trusted_keys: Mapping[str, bytes] | None = None,
-    require_signature: bool = False,
+    require_signature: bool = True,
 ) -> SkillPackageInspection:
     """Validate and describe a skill package without installing it into a caller registry.
 
     Skill instructions and examples are intentionally omitted from the result. The package archive
     is copied to private temporary storage, fully checked against its checksummed manifest, and
-    extracted only into a temporary directory. If a detached signature is present and trusted keys
-    are supplied, it is verified before metadata is returned.
+    extracted only into a temporary directory. A detached publisher signature is required by
+    default and must verify against host-supplied trusted keys before metadata is returned.
     """
     if not isinstance(require_signature, bool):
         raise SkillPackageError("require_signature must be a boolean")
@@ -294,11 +294,11 @@ def install_skill(
     package: str | Path,
     registry: str | Path,
     *,
-    require_signature: bool = False,
+    require_signature: bool = True,
     trusted_keys: Mapping[str, bytes] | None = None,
     signature_path: str | Path | None = None,
 ) -> SkillPackageInfo:
-    """Validate and atomically install a package, optionally requiring publisher authentication."""
+    """Validate and atomically install a package, requiring publisher authentication by default."""
     archive_path = Path(package).expanduser()
     try:
         archive_path = archive_path.resolve(strict=True)

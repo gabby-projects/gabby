@@ -182,8 +182,9 @@ Initialization refuses to replace an existing directory. Package and install an 
 the commands shown above.
 
 Installation writes `skills/<id>/<version>/skill.yaml` and refuses to overwrite an existing
-version. Package checksums detect file corruption. The optional `skill-signing` extra adds detached
-Ed25519 signatures verified against host-managed public keys. Skill contents remain untrusted
+version. Package checksums detect file corruption. Gabby requires detached Ed25519 signatures for
+package installation and inspection by default, verified against host-managed public keys. Install
+the optional `skill-signing` extra to enable signature verification. Skill contents remain untrusted
 instructions and should be reviewed before attaching them to an agent. Static HTTPS registries support
 catalog search, exact version discovery, and signature-required installation; see the
 [skill registry guide](../docs/SKILL_REGISTRY.md). You can also place a package directory beside an
@@ -201,14 +202,15 @@ gabby skill sign ./dist/debugging.gabskill \
 gabby skill verify ./dist/debugging.gabskill \
   --trusted-key gabby-release-2026=./trusted-keys/gabby-release.pub
 gabby skill install ./dist/debugging.gabskill --registry ./skills \
-  --require-signature \
   --trusted-key gabby-release-2026=./trusted-keys/gabby-release.pub
 gabby skill audit --registry ./skills --revoked-key old-release-key
 gabby skill uninstall debugging 1.0.0 --registry ./skills --yes
 ```
 
 The signature is a detached `ARCHIVE.sig` file and covers the exact archive digest and key ID.
-Unsigned local installs remain available when `--require-signature` is omitted. Each install records
+Unsigned packages are rejected unless `--allow-unsigned` is explicitly selected for local
+development. Agents also require a host `SkillTrustPolicy` to load installed packages by default;
+`allow_unsigned_skills=True` is a deliberate development override. Each install records
 its signer ID and archive digest for inventory; `gabby skill audit` flags revoked, unknown, or
 invalid records. This metadata is advisory and does not disable installed skills or prove their
 current contents are unchanged. `gabby skill uninstall` removes one validated exact skill version
@@ -314,11 +316,27 @@ and closes every agent in the composition. See the [extension contract reference
 
 ## Tool trust and isolation
 
-Tools run as `host_trusted` by default. Their handlers execute inside the Gabby process with its host operating-system permissions; registering a handler grants the agent a way to invoke that code. `Tool.execution` exposes this classification. The built-in shell and filesystem tools declare `execution: sandboxed` and run in the configured per-run container. Set `policies.require_sandbox: true` to reject any declared tool without a sandboxed implementation before the model is called. This setting does not move arbitrary Python handlers into a container.
+Tools run as `host_trusted` by default. Their handlers execute inside the Gabby process with its host operating-system permissions; registering a handler grants the agent a way to invoke that code. `Tool.execution` exposes this classification. Gabby requires sandboxed execution by default and rejects host-trusted tools before the model is called. Set `policies.require_sandbox: false` only when the host intentionally accepts in-process handlers. The built-in shell and filesystem tools declare `execution: sandboxed` and run in the configured per-run container. Use `sandboxed_python_tool()` for importable Python handlers that should run inside that sandbox; the selected image must include Gabby and the handler package.
 
 See the [threat model](../docs/THREAT_MODEL.md) for trust boundaries, current controls, residual risks,
 and the evidence required before hosted-production claims. See the [operations guide](../docs/OPERATIONS.md)
 for service, storage, streaming, and sandbox deployment responsibilities.
+
+## Model payload filters
+
+Gabby applies a default provider-boundary filter to reasoning, planning, and skill-selection calls.
+It redacts common email, phone, and token patterns from outbound messages, tool schemas, and
+user-facing response text, and rejects simple direct attempts in user or tool content to override higher-priority
+instructions. These are lightweight heuristics, not semantic prompt-injection detection or a
+guarantee that all sensitive data is removed. Hosts can add synchronous or asynchronous filters with
+`Agent(..., payload_filters=[...])` for organization-specific checks before provider calls and before
+model responses reach runtime handling. Filtered requests are rechecked against the configured
+`max_model_request_bytes` limit. The built-in heuristic filter runs on each stream delta so
+SSE remains incremental; patterns split across provider chunks may evade its redaction. Adding a
+host filter buffers the full stream until that filter approves the complete response, which can add
+latency but prevents partial output from escaping before approval.
+The default filter leaves structured tool-call arguments unchanged so it cannot silently change an
+operation; add a host filter that rejects tool arguments when policy requires that check.
 
 ## Run from Python
 
@@ -451,7 +469,7 @@ policies:
     - shell.execute
     - filesystem.read
     - filesystem.write
-  require_sandbox: true
+  require_sandbox: true # default; set false only for deliberately trusted in-process handlers
   max_steps: 8
   max_tool_calls: 64
   timeout_seconds: 120
@@ -459,6 +477,7 @@ policies:
 sandbox:
   engine: docker
   adapter: cli
+  runtime: runsc # optional Docker runtime, for example gVisor's runsc
   image: python:3.12-slim
   require_image_digest: false # set true in production for immutable image identity
   user: "65532:65532" # default; Linux only, numeric non-root UID:GID
@@ -489,6 +508,13 @@ programs the agent needs to run. Native Windows containers require Docker with H
 Gabby checks the Docker server version and requires 29.1.4 or newer before starting one, because
 earlier Docker releases could panic when asked to start a Windows container with networking disabled.
 Podman uses Linux containers on every host.
+
+Docker and Podman can select an installed runtime such as gVisor's `runsc` using `sandbox.runtime`.
+For a microVM backend such as Firecracker, configure `engine: custom` and `adapter: custom`, then
+inject a host implementation of Gabby's `EngineAdapter` through `Agent(sandbox_adapter=...)`. Gabby
+provides the adapter contract, not a Firecracker or gVisor installation; the host adapter is
+responsible for creating, bounding, and cleaning up the isolated environment. A custom adapter must
+honor workspace, resource, network, deadline, and cleanup restrictions.
 
 Set `sandbox.require_image_digest: true` to require an immutable OCI reference ending in
 `@sha256:<64 hex characters>`. This is opt-in for local development; production deployments should
@@ -542,6 +568,31 @@ the engine command and run container. Results are also checked against `output_s
 provided. The executable and argv come from trusted agent configuration,
 never from model-supplied tool arguments. See
 [ADR 0003](../docs/architecture/adr/0003-container-sandbox.md).
+
+For Python handlers packaged in the selected image, `sandboxed_python_tool()` creates the fixed
+worker command and keeps the callable out of the main Gabby process:
+
+```python
+from gabby import sandboxed_python_tool
+
+summarize = sandboxed_python_tool(
+    name="summarize_record",
+    description="Summarize one validated record.",
+    handler="my_agent_tools:summarize_record",
+    parameters={
+        "type": "object",
+        "properties": {"text": {"type": "string"}},
+        "required": ["text"],
+        "additionalProperties": False,
+    },
+    output_schema={"type": "object", "required": ["summary"]},
+)
+```
+
+The referenced function must be importable in the sandbox image and accept schema-defined
+arguments as keyword arguments. Its return value must be JSON serializable and satisfy the output
+schema. Local functions and closures are rejected so the host cannot accidentally serialize runtime
+state into the worker.
 
 An environment can be supplied as a reusable object. Agent construction snapshots its capability description, tool registrations, and allowlist into an agent-local registry; resource handles are shared with the supplied environment. An additional `ToolRegistry` passed to `Agent` is merged into the local registry without mutating either caller-owned registry. The environment allowlist is intersected with `policies.allowed_tools` at runtime; resources are not copied into model context automatically.
 

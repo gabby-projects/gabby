@@ -103,6 +103,7 @@ class ContainerSpec:
     cpus: float
     memory_bytes: int
     process_limit: int | None
+    runtime: str | None = None
     tool_input_host_path: str | None = None
     tool_input_container_path: str | None = None
     user: str = DEFAULT_SANDBOX_USER
@@ -688,6 +689,10 @@ def _windows_device_name(part: str) -> bool:
 def _adapter_for(config: SandboxDefinition) -> EngineAdapter:
     from .sandbox_engines import api_adapter, cli_adapter
 
+    if config.adapter == "custom":
+        raise SandboxUnavailable(
+            "A custom sandbox adapter must be supplied with Agent(sandbox_adapter=...)"
+        )
     if config.adapter == "cli":
         return cli_adapter(config.engine)
     return api_adapter(config)
@@ -811,6 +816,7 @@ async def open_sandbox(
             cpus=config.cpus,
             memory_bytes=config.memory_bytes,
             process_limit=config.process_limit,
+            runtime=config.runtime,
             tool_input_host_path=(tool_input_directory.name if tool_input_directory else None),
             tool_input_container_path=tool_input_container_path,
             user=config.user,

@@ -105,6 +105,7 @@ async def run_example() -> tuple[str, str, str, str]:
                 "allowed_permissions": ["agent:invoke"],
                 "max_steps": 3,
                 "timeout_seconds": 5,
+                "require_sandbox": False,
             },
         ),
         model=CoordinatorModel(),

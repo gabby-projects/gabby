@@ -257,10 +257,12 @@ installation reject case-folded or Unicode-normalized path collisions so an arch
 contents on case-insensitive hosts. Per-file SHA-256 checksums detect corruption. The optional
 `skill-signing` extra provides detached Ed25519 signatures over the exact archive digest and key ID.
 `sign_skill_package` accepts a raw 32-byte private key; `verify_skill_package_signature` requires a
-host-owned mapping from key IDs to raw 32-byte public keys. Pass `require_signature=True` and
-`trusted_keys=...` to `install_skill` when installation must authenticate a publisher. The CLI
-provides `gabby skill sign`, `gabby skill verify`, and `gabby skill install --require-signature`.
-Unsigned local installation remains available by default. Signature verification establishes that
+host-owned mapping from key IDs to raw 32-byte public keys. `install_skill` and
+`inspect_skill_package` require signatures by default and need `trusted_keys=...` to authenticate a
+publisher. Set `require_signature=False` only for deliberate local development. The CLI provides
+`gabby skill sign`, `gabby skill verify`, and signature-required `gabby skill install` by default;
+`--allow-unsigned` is the explicit development override. Installed skill packages also require a
+host `SkillTrustPolicy` before an agent loads them. Signature verification establishes that
 the archive was signed by one of the configured keys; skill instructions remain untrusted model
 input and must be reviewed. For remote discovery and signature-required downloads, see the
 [static skill registry format](SKILL_REGISTRY.md); Python hosts can use the async

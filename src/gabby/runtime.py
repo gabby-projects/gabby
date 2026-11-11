@@ -666,7 +666,7 @@ class Runtime:
             or timeout <= 0
         ):
             raise ValueError("policies.timeout_seconds must be a finite positive number")
-        require_sandbox = policies.get("require_sandbox", False)
+        require_sandbox = policies.get("require_sandbox", True)
         if not isinstance(require_sandbox, bool):
             raise ValueError("policies.require_sandbox must be a boolean")
         max_model_request_bytes = policies.get(
@@ -837,7 +837,7 @@ class Runtime:
     ) -> ExecutionResult:
         definition = self.agent.definition
         policies = definition.policies
-        require_sandbox = policies.get("require_sandbox", False)
+        require_sandbox = policies.get("require_sandbox", True)
         max_steps = int(policies.get("max_steps", 8))
         max_tool_calls = int(policies.get("max_tool_calls", DEFAULT_MAX_TOOL_CALLS))
         max_parallel_tool_calls = policies.get(
@@ -1919,7 +1919,7 @@ class Runtime:
         trace: ExecutionTrace,
         deadline: float,
     ) -> ModelResponse:
-        provider = self.agent.model
+        provider = self.agent._model_provider
         stream = getattr(provider, "stream", None)
         retries = self.agent.definition.policies.get("max_model_retries", 0)
         if (

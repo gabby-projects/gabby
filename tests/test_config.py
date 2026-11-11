@@ -694,6 +694,9 @@ def test_load_skill_rejects_non_string_text_fields(
         ({"image": "python:3.12\n--privileged"}, "sandbox.image.*whitespace/control"),
         ({"image": "python:3.12\x7f"}, "sandbox.image.*whitespace/control"),
         ({"adapter": "bad"}, "sandbox.adapter"),
+        ({"runtime": "../runsc"}, "sandbox.runtime"),
+        ({"engine": "custom"}, "custom sandbox engines require adapter='custom'"),
+        ({"adapter": "custom"}, "custom sandbox engines require adapter='custom'"),
         ({"workspace": "./workspace"}, "sandbox.workspace"),
         ({"user": "0:0"}, "sandbox.user"),
         ({"user": 1001}, "sandbox.user"),
@@ -808,6 +811,25 @@ def test_sandbox_definition_can_require_an_immutable_image_digest() -> None:
     )
 
     assert definition.require_image_digest
+
+
+def test_sandbox_definition_accepts_gvisor_runtime_and_custom_microvm_adapter() -> None:
+    docker = SandboxDefinition(
+        engine="docker",
+        image="python:3.12",
+        keepalive_argv=("sleep", "infinity"),
+        runtime="runsc",
+    )
+    microvm = SandboxDefinition(
+        engine="custom",
+        adapter="custom",
+        image="gabby-firecracker-rootfs:latest",
+        keepalive_argv=("/sbin/init",),
+    )
+
+    assert docker.runtime == "runsc"
+    assert microvm.engine == "custom"
+    assert microvm.adapter == "custom"
 
 
 def test_workspace_mount_requires_existing_directory_and_safe_container_path(

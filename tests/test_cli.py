@@ -899,7 +899,21 @@ def test_cli_pack_and_unsigned_install(tmp_path: Path, capsys: pytest.CaptureFix
     assert main(["skill", "pack", str(source), "--output", str(package)]) == 0
     assert "Created local-helper@1.0.0" in capsys.readouterr().out
     registry = tmp_path / "registry"
-    assert main(["skill", "install", str(package), "--registry", str(registry)]) == 0
+    assert main(["skill", "install", str(package), "--registry", str(registry)]) == 2
+    assert "trusted-key" in capsys.readouterr().err.lower()
+    assert (
+        main(
+            [
+                "skill",
+                "install",
+                str(package),
+                "--registry",
+                str(registry),
+                "--allow-unsigned",
+            ]
+        )
+        == 0
+    )
     assert "Installed local-helper@1.0.0" in capsys.readouterr().out
     installed = registry / "local-helper" / "1.0.0"
     assert (installed / "skill.yaml").is_file()

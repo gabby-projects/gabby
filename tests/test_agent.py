@@ -382,6 +382,33 @@ async def test_agent_trust_policy_verifies_installed_skills_at_construction(
 
 
 @pytest.mark.asyncio
+async def test_installed_skills_require_trust_policy_by_default(tmp_path: Path) -> None:
+    source = tmp_path / "skill-source"
+    source.mkdir()
+    (source / "skill.yaml").write_text(
+        "name: local/review\nversion: 1.0.0\ndescription: Review local changes\n",
+        encoding="utf-8",
+    )
+    package = tmp_path / "review.gabskill"
+    pack_skill(source, package)
+    registry = tmp_path / "skills"
+    install_skill(package, registry, require_signature=False)
+
+    definition = _definition()
+    definition.skills = ["local/review@1.0.0"]
+    definition.source_path = tmp_path / "agent.yaml"
+
+    with pytest.raises(ConfigError, match="requires a host SkillTrustPolicy"):
+        Agent(definition, model=ReusableModel())
+
+    development_agent = Agent(
+        definition,
+        model=ReusableModel(),
+        allow_unsigned_skills=True,
+    )
+    assert [skill.name for skill in development_agent.skills] == ["local/review"]
+
+
 async def test_agent_closes_only_a_model_it_constructed() -> None:
     agent = Agent(_definition())
     model = agent.model
