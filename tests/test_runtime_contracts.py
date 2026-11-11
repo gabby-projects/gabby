@@ -322,8 +322,45 @@ async def test_failed_persona_check_rejects_response_before_streaming_it() -> No
         persona_verifier=RejectingPersonaCheck(),
     )
 
+    emitted = []
     with pytest.raises(AgentRuntimeError, match="persona compliance verification did not pass"):
+        async for event in agent.astream("Help me"):
+            emitted.append(event)
+    assert not any(
+        event.type == "text_delta" and "Unacceptable response" in event.data.get("text", "")
+        for event in emitted
+    )
+    assert not any(event.type == "completed" for event in emitted)
+
+
+@pytest.mark.asyncio
+async def test_invalid_persona_verification_result_is_exported_to_trace() -> None:
+    class InvalidPersonaCheck:
+        async def verify_persona(self, **_: Any) -> Any:
+            return {"passed": True}
+
+    class CaptureTracer:
+        def __init__(self) -> None:
+            self.events: list[Any] = []
+
+        async def on_event(self, **kwargs: Any) -> None:
+            self.events.append(kwargs["event"])
+
+    tracer = CaptureTracer()
+    agent = _agent(
+        SequenceModel(ModelResponse(content="response")),
+        persona={"tone": "calm"},
+        verification={"persona_compliance": True},
+        persona_verifier=InvalidPersonaCheck(),
+        tracer=tracer,
+    )
+
+    with pytest.raises(AgentRuntimeError, match="Persona verifier returned an invalid result"):
         await agent.arun("Help me")
+
+    event = next(event for event in tracer.events if event.kind == "persona_verification")
+    assert event.details["result"] == "invalid_result"
+    assert event.duration_ms is not None
 
 
 @pytest.mark.asyncio
@@ -371,9 +408,7 @@ async def test_user_scoped_rag_pipeline_applies_persona_and_isolates_retrieved_c
     alice_prompt = "\n".join(
         message.get("content", "") for message in alice_model.calls[0]["messages"]
     )
-    bob_prompt = "\n".join(
-        message.get("content", "") for message in bob_model.calls[0]["messages"]
-    )
+    bob_prompt = "\n".join(message.get("content", "") for message in bob_model.calls[0]["messages"])
     assert "Character: concise and practical." in alice_prompt
     assert "alice prefers concise" in alice_prompt
     assert "bob prefers" not in alice_prompt

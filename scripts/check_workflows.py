@@ -160,8 +160,14 @@ def main() -> int:
         release = release_path.read_text(encoding="utf-8")
         if 'tags: ["v*"]' not in release:
             failures.append("Release workflow must run only for v-prefixed version tags.")
-        if "  build:\n    needs: [platform, quality, sandbox-live, deployment-container]" not in release:
-            failures.append("Release distribution build must wait for platform, quality, sandbox, and container gates.")
+        if (
+            "  build:\n    needs: [platform, quality, sandbox-live, deployment-container]"
+            not in release
+        ):
+            failures.append(
+                "Release distribution build must wait for platform, quality, sandbox, and "
+                "container gates."
+            )
         release_deployment = release.partition("  deployment-container:\n")[2].partition(
             "  quality:\n"
         )[0]

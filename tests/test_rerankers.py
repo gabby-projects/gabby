@@ -15,7 +15,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import traceback
 from collections.abc import AsyncIterator
@@ -34,7 +33,6 @@ from gabby import (
     RerankingRetriever,
     VoyageReranker,
 )
-from gabby.config import ConfigError
 
 _ASYNC_CLIENT = httpx.AsyncClient
 

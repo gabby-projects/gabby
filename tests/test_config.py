@@ -68,9 +68,7 @@ def test_load_agent_accepts_structured_persona_fields(tmp_path: Path) -> None:
     definition = load_agent(source)
 
     assert definition.persona["role"] == "Support assistant"
-    assert definition.persona["forbidden_behaviors"] == [
-        "Never request a full card number"
-    ]
+    assert definition.persona["forbidden_behaviors"] == ["Never request a full card number"]
 
 
 def test_load_agent_accepts_output_schema_and_programmatic_validation_matches(

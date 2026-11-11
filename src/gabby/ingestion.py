@@ -165,12 +165,15 @@ class ParagraphChunker:
         flush()
         if self.overlap_chars == 0 or len(chunks) < 2:
             return chunks
-        return [chunks[0], *(
-            f"{previous[-self.overlap_chars:].lstrip()}\n{current}"
-            if previous[-self.overlap_chars:].strip()
-            else current
-            for previous, current in zip(chunks, chunks[1:], strict=False)
-        )]
+        return [
+            chunks[0],
+            *(
+                f"{previous[-self.overlap_chars :].lstrip()}\n{current}"
+                if previous[-self.overlap_chars :].strip()
+                else current
+                for previous, current in zip(chunks, chunks[1:], strict=False)
+            ),
+        ]
 
     def _split_long_paragraph(self, paragraph: str) -> list[str]:
         pieces: list[str] = []
@@ -232,13 +235,17 @@ class FileIngestor:
         self.store = store
         self.root = resolved_root
         self.chunker = chunker or ParagraphChunker()
-        configured_parsers = tuple(parsers) if parsers is not None else (
-            Utf8TextParser(
-                max_input_bytes=max_file_bytes, max_extracted_chars=max_extracted_chars
-            ),
-            MarkupTextParser(
-                max_input_bytes=max_file_bytes, max_extracted_chars=max_extracted_chars
-            ),
+        configured_parsers = (
+            tuple(parsers)
+            if parsers is not None
+            else (
+                Utf8TextParser(
+                    max_input_bytes=max_file_bytes, max_extracted_chars=max_extracted_chars
+                ),
+                MarkupTextParser(
+                    max_input_bytes=max_file_bytes, max_extracted_chars=max_extracted_chars
+                ),
+            )
         )
         self.parsers: dict[str, FileParser] = {}
         for parser in configured_parsers:

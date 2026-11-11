@@ -40,6 +40,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .agent import Agent
 from .auth import Authenticator, BearerTokenAuthenticator, Principal
+from .host_context import HostContext
 from .runtime import MAX_RUN_INPUT_CHARS, AgentRuntimeError, StreamEventType
 from .skill_trust import SkillIntegrityError, SkillRevocationUnavailable, SkillRevokedError
 
@@ -88,6 +89,7 @@ class RunPayload(BaseModel):
     context: dict[str, Any] = Field(default_factory=dict)
     memory: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    host_context: HostContext | None = None
     include_trace: bool = True
 
 
@@ -1319,6 +1321,7 @@ def create_app(
                     context=payload.context,
                     memory=payload.memory,
                     metadata=payload.metadata,
+                    host_context=payload.host_context,
                     principal=principal,
                 )
             )
@@ -1510,6 +1513,7 @@ def create_app(
                         context=request.context,
                         memory=request.memory,
                         metadata=request.metadata,
+                        host_context=request.host_context,
                         principal=principal,
                     )
                     try:
@@ -1623,6 +1627,7 @@ def create_app(
                 context=request.context,
                 memory=request.memory,
                 metadata=request.metadata,
+                host_context=request.host_context,
                 principal=principal,
             )
             iterator = events.__aiter__()

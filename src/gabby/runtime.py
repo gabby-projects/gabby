@@ -41,8 +41,8 @@ from .config import (
     MAX_REPLANS,
     MAX_TOOL_CALLS,
 )
-from .knowledge import Document
 from .host_context import HostContext
+from .knowledge import Document
 from .models import (
     ModelRequestSizeError,
     ModelResponse,
@@ -547,7 +547,7 @@ class Runtime:
             if skill.style:
                 style = [
                     "Skill-scoped style guidance (refines this skill's task only; preserve the "
-                    "agent's core persona and all higher-priority instructions and runtime policies):"
+                    "agent's core persona and higher-priority instructions and policies):"
                 ]
                 if skill.style.get("voice"):
                     style.append(f"Voice: {skill.style['voice']}")
@@ -555,8 +555,7 @@ class Runtime:
                     style.append(f"Tone: {skill.style['tone']}")
                 if skill.style.get("formatting_rules"):
                     style.append(
-                        "Formatting rules:\n- "
-                        + "\n- ".join(skill.style["formatting_rules"])
+                        "Formatting rules:\n- " + "\n- ".join(skill.style["formatting_rules"])
                     )
                 content.append("\n".join(style))
             if skill.description:
@@ -1045,7 +1044,8 @@ class Runtime:
         if definition.verification.get("persona_compliance", False):
             if self.persona_verifier is None:
                 raise AgentRuntimeError(
-                    "Persona compliance verification is enabled but no persona verifier was supplied"
+                    "Persona compliance verification is enabled but no persona verifier "
+                    "was supplied"
                 )
             if not definition.persona:
                 raise AgentRuntimeError("Persona compliance verification requires persona settings")
@@ -1505,7 +1505,8 @@ class Runtime:
                     persona_verifier = self.persona_verifier
                     if persona_verifier is None:
                         raise AgentRuntimeError(
-                            "Persona compliance verification is enabled but no persona verifier was supplied"
+                            "Persona compliance verification is enabled but no persona "
+                            "verifier was supplied"
                         )
                     try:
                         persona_verification = await _invoke_with_timeout(
@@ -1520,19 +1521,15 @@ class Runtime:
                             timeout=max(0.001, deadline - persona_started),
                         )
                     except Exception as exc:
-                        persona_event.details.update(
-                            result="error", error_type=type(exc).__name__
-                        )
-                        persona_event.duration_ms = (
-                            time.perf_counter() - persona_started
-                        ) * 1000
+                        persona_event.details.update(result="error", error_type=type(exc).__name__)
+                        persona_event.duration_ms = (time.perf_counter() - persona_started) * 1000
                         await self._export_trace_event(trace, persona_event, deadline=deadline)
                         raise AgentRuntimeError("Persona compliance verification failed") from exc
                     if not isinstance(persona_verification, VerificationResult):
                         persona_event.details["result"] = "invalid_result"
-                        raise AgentRuntimeError(
-                            "Persona verifier returned an invalid result"
-                        )
+                        persona_event.duration_ms = (time.perf_counter() - persona_started) * 1000
+                        await self._export_trace_event(trace, persona_event, deadline=deadline)
+                        raise AgentRuntimeError("Persona verifier returned an invalid result")
                     persona_event.details["result"] = persona_verification.as_dict()
                     persona_event.duration_ms = (time.perf_counter() - persona_started) * 1000
                     await self._export_trace_event(trace, persona_event, deadline=deadline)
@@ -1977,7 +1974,11 @@ class Runtime:
                         deadline=deadline,
                         event_sink=event_sink,
                     )
-            if response.content and not self._active_output_validators and not self._persona_check_enabled():
+            if (
+                response.content
+                and not self._active_output_validators
+                and not self._persona_check_enabled()
+            ):
                 await self._emit(event_sink, "text_delta", text=response.content)
             return response
 

@@ -73,3 +73,17 @@ class Verifier(Protocol):
         self, *, request: RunRequest, output: str, trace: ExecutionTrace
     ) -> VerificationResult | Awaitable[VerificationResult]:
         """Check an output and return a structured, evidence-bearing outcome."""
+
+
+class PersonaVerifier(Protocol):
+    """Check generated text against the configured structured persona."""
+
+    def verify_persona(
+        self,
+        *,
+        request: RunRequest,
+        output: str,
+        persona: Mapping[str, object],
+        trace: ExecutionTrace,
+    ) -> VerificationResult | Awaitable[VerificationResult]:
+        """Return a structured compliance outcome for one generated response."""

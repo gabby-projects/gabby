@@ -15,22 +15,19 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import math
 import os
-import re
 import uuid
 from collections.abc import AsyncIterator, Iterator, Mapping
 from dataclasses import dataclass, field
 from inspect import signature
 from itertools import chain
-from typing import Any, ClassVar, Protocol, cast
+from typing import Any, ClassVar, Protocol
 from urllib.parse import quote
 
 import httpx
 
-from ._sync import run_sync_callback
 from .config import (
     DEFAULT_MAX_MODEL_REQUEST_BYTES,
     DEFAULT_MAX_MODEL_RESPONSE_BYTES,

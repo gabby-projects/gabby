@@ -45,7 +45,12 @@ async def test_async_run_posts_stateless_context_and_parses_result() -> None:
         bearer_token="secret",
         transport=_transport(handle),
     ) as client:
-        result = await client.arun("task", context={"project": "alpha"}, include_trace=False)
+        result = await client.arun(
+            "task",
+            context={"project": "alpha"},
+            host_context={"user_preferences": {"locale": "en-AU"}},
+            include_trace=False,
+        )
 
     assert result == RunResult("done", {"cost": 2}, "trace-1", None)
     assert requests[0].url.raw_path == b"/prefix/v1/agents/agent%20%2F%20one/run"
@@ -55,6 +60,7 @@ async def test_async_run_posts_stateless_context_and_parses_result() -> None:
         "context": {"project": "alpha"},
         "memory": {},
         "metadata": {},
+        "host_context": {"user_preferences": {"locale": "en-AU"}},
         "include_trace": False,
     }
 
