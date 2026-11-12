@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Bounded plain-text and Markdown ingestion with replaceable parser interfaces."""
 
 from __future__ import annotations
@@ -357,20 +358,17 @@ class FileIngestor:
         self._validate_metadata(metadata)
 
         def discover_files() -> list[Path]:
-            files = sorted(
-                (
-                    path
-                    for path in self.root.rglob("*")
-                    if path.is_file()
-                    and not path.is_symlink()
-                    and path.suffix.casefold() in self.parsers
-                ),
-                key=lambda path: path.relative_to(self.root).as_posix(),
-            )
-            if len(files) > self.max_files:
-                raise ValueError(f"directory exceeds max_files={self.max_files}")
+            files: list[Path] = []
             total = 0
-            for path in files:
+            for path in self.root.rglob("*"):
+                if (
+                    not path.is_file()
+                    or path.is_symlink()
+                    or path.suffix.casefold() not in self.parsers
+                ):
+                    continue
+                if len(files) >= self.max_files:
+                    raise ValueError(f"directory exceeds max_files={self.max_files}")
                 size = path.stat().st_size
                 source = path.relative_to(self.root).as_posix()
                 if size > self.max_file_bytes:
@@ -380,7 +378,8 @@ class FileIngestor:
                 total += size
                 if total > self.max_total_bytes:
                     raise ValueError(f"directory exceeds max_total_bytes={self.max_total_bytes}")
-            return files
+                files.append(path)
+            return sorted(files, key=lambda path: path.relative_to(self.root).as_posix())
 
         files = await run_sync_callback(discover_files)
         sources: list[str] = []

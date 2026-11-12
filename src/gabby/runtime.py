@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Async stateless orchestration loop for model, skills, tools, and verification."""
 
 from __future__ import annotations
@@ -433,6 +434,30 @@ def _add_usage(total: dict[str, int | float], usage: dict[Any, Any]) -> None:
             continue
 
 
+def _token_usage(usage: Mapping[str, Any]) -> dict[str, int]:
+    """Normalize provider token aliases without counting duplicate aliases twice."""
+    normalized: dict[str, int] = {}
+    for canonical, aliases in (
+        ("input_tokens", ("input_tokens", "prompt_tokens", "promptTokenCount")),
+        ("output_tokens", ("output_tokens", "completion_tokens", "candidatesTokenCount")),
+        ("total_tokens", ("total_tokens", "totalTokenCount")),
+    ):
+        value = _usage_value(usage, aliases)
+        if value is not None:
+            normalized[canonical] = value
+    if "total_tokens" not in normalized and {
+        "input_tokens",
+        "output_tokens",
+    }.issubset(normalized):
+        normalized["total_tokens"] = normalized["input_tokens"] + normalized["output_tokens"]
+    return normalized
+
+
+def _add_budget_usage(total: dict[str, int | float], usage: Mapping[str, Any]) -> None:
+    """Aggregate normalized per-call token counts for run-wide budget enforcement."""
+    _add_usage(total, _token_usage(usage))
+
+
 def _usage_value(usage: Mapping[str, Any], names: tuple[str, ...]) -> int | None:
     for name in names:
         value = usage.get(name)
@@ -446,13 +471,26 @@ def _check_run_usage_limits(
     policies: Mapping[str, Any],
     *,
     require_usage: bool = False,
+    current_usage: Mapping[str, Any] | None = None,
 ) -> None:
     """Fail closed at each provider-reported usage boundary before another run step."""
-    input_tokens = _usage_value(usage, ("prompt_tokens", "input_tokens"))
-    output_tokens = _usage_value(usage, ("completion_tokens", "output_tokens"))
+    input_tokens = _usage_value(usage, ("input_tokens", "prompt_tokens"))
+    output_tokens = _usage_value(usage, ("output_tokens", "completion_tokens"))
     total_tokens = _usage_value(usage, ("total_tokens",))
+    token_budget_enabled = "max_total_tokens" in policies or "max_cost_usd" in policies
+    if require_usage and token_budget_enabled:
+        current = _token_usage(current_usage or {})
+        if not current:
+            raise AgentRuntimeError("Model provider omitted token usage required by run budget")
+        if "max_total_tokens" in policies and "total_tokens" not in current:
+            raise AgentRuntimeError("Model provider omitted token usage required by run budget")
+        if "max_cost_usd" in policies and not {
+            "input_tokens",
+            "output_tokens",
+        }.issubset(current):
+            raise AgentRuntimeError("Model provider omitted token usage required by cost budget")
     if input_tokens is None and output_tokens is None and total_tokens is None:
-        if require_usage and ("max_total_tokens" in policies or "max_cost_usd" in policies):
+        if require_usage and token_budget_enabled:
             raise AgentRuntimeError("Model provider omitted token usage required by run budget")
         return
     if total_tokens is None and input_tokens is not None and output_tokens is not None:
@@ -977,6 +1015,7 @@ class Runtime:
         skills_by_name = {skill.name: skill for skill in self.agent.skills}
         activation_methods: dict[str, str] = {}
         total_usage: dict[str, int | float] = {}
+        budget_usage: dict[str, int | float] = {}
         selection_started = time.perf_counter()
         selection_timeout = deadline - time.perf_counter()
         if selection_timeout <= 0:
@@ -1018,7 +1057,13 @@ class Runtime:
         selection_usage: dict[str, int | float] = {}
         _add_usage(selection_usage, selection.usage)
         _add_usage(total_usage, selection_usage)
-        _check_run_usage_limits(total_usage, policies)
+        _add_budget_usage(budget_usage, selection.usage)
+        _check_run_usage_limits(
+            budget_usage,
+            policies,
+            require_usage=selection.model is not None,
+            current_usage=selection.usage,
+        )
         selection_duration_ms = (time.perf_counter() - selection_started) * 1000
         if selection.model is not None:
             await self._record_trace(
@@ -1300,9 +1345,19 @@ class Runtime:
                 ) from None
 
         exposed = []
+        exposed_names: list[str] = []
         for name in sorted(declared):
             tool = self.agent.tools.get(name)
-            await authorize_tool_access(name, tool.permissions or [], preflight=True)
+            try:
+                await authorize_tool_access(name, tool.permissions or [], preflight=True)
+            except ToolError as exc:
+                if (
+                    self.agent._uses_default_policy_engine_factory
+                    and exc.code == ToolErrorCode.POLICY_DENIED
+                    and name not in getattr(typed_policy, "allowed_tools", set())
+                ):
+                    continue
+                raise
             if require_sandbox and tool.execution != "sandboxed":
                 raise AgentRuntimeError(
                     f"Policy requires sandboxed execution; tool {name!r} is host-trusted"
@@ -1310,12 +1365,13 @@ class Runtime:
             if tool.sandbox_action is not None and self._sandbox_session is None:
                 raise AgentRuntimeError(f"Tool {name!r} requires a configured per-run sandbox")
             exposed.append(tool.as_model_tool())
+            exposed_names.append(name)
         planning_capabilities = [
             PlanningCapability("skill", skill.name, skill.description) for skill in active_skills
         ]
         planning_capabilities.extend(
             PlanningCapability("tool", name, self.agent.tools.get(name).description)
-            for name in sorted(declared)
+            for name in exposed_names
         )
 
         async def request_plan(
@@ -1379,7 +1435,13 @@ class Runtime:
             planning_usage: dict[str, int | float] = {}
             _add_usage(planning_usage, planning_result.usage)
             _add_usage(total_usage, planning_usage)
-            _check_run_usage_limits(total_usage, policies)
+            _add_budget_usage(budget_usage, planning_result.usage)
+            _check_run_usage_limits(
+                budget_usage,
+                policies,
+                require_usage=planning_result.model is not None,
+                current_usage=planning_result.usage,
+            )
             planning_duration_ms = (time.perf_counter() - planning_started) * 1000
             if planning_result.model is not None:
                 await self._record_trace(
@@ -1512,7 +1574,13 @@ class Runtime:
                 duration_ms=(time.perf_counter() - model_call_started) * 1000,
             )
             _add_usage(total_usage, response.usage)
-            _check_run_usage_limits(total_usage, policies, require_usage=True)
+            _add_budget_usage(budget_usage, response.usage)
+            _check_run_usage_limits(
+                budget_usage,
+                policies,
+                require_usage=True,
+                current_usage=response.usage,
+            )
             if not response.tool_calls:
                 output = response.content or ""
                 await self._record_trace(
@@ -1810,12 +1878,13 @@ class Runtime:
                             )
                         await self._emit(event_sink, "approval_granted", name=name, call_id=call_id)
                     tool_started = time.perf_counter()
-                    remaining = deadline - time.perf_counter()
+                    tool_deadline = min(deadline, tool_started + tool.timeout_seconds)
+                    remaining = tool_deadline - time.perf_counter()
                     if remaining <= 0:
                         raise ToolError(
                             "Execution deadline exceeded", code=ToolErrorCode.DEADLINE_EXCEEDED
                         )
-                    tool_timeout = min(tool.timeout_seconds, remaining)
+                    tool_timeout = remaining
                     if tool.sandbox_action is not None:
                         if self._sandbox_session is None:
                             raise ToolError(
@@ -1825,8 +1894,14 @@ class Runtime:
                         if tool.sandbox_action == "tool.execute":
                             assert tool.sandbox_command is not None
                             credential_environment = await self._resolve_sandbox_credentials(
-                                name, request.principal, trace.trace_id, deadline
+                                name, request.principal, trace.trace_id, tool_deadline
                             )
+                            tool_timeout = tool_deadline - time.perf_counter()
+                            if tool_timeout <= 0:
+                                raise ToolError(
+                                    "Tool execution timed out",
+                                    code=ToolErrorCode.DEADLINE_EXCEEDED,
+                                )
                             tool_result = await self._sandbox_session.invoke_tool(
                                 tool.sandbox_command,
                                 arguments,
@@ -1838,8 +1913,14 @@ class Runtime:
                             if tool.sandbox_action == "python.run":
                                 assert tool.sandbox_command is not None
                                 credential_environment = await self._resolve_sandbox_credentials(
-                                    name, request.principal, trace.trace_id, deadline
+                                    name, request.principal, trace.trace_id, tool_deadline
                                 )
+                                tool_timeout = tool_deadline - time.perf_counter()
+                                if tool_timeout <= 0:
+                                    raise ToolError(
+                                        "Tool execution timed out",
+                                        code=ToolErrorCode.DEADLINE_EXCEEDED,
+                                    )
                                 tool_result = await self._sandbox_session.invoke(
                                     tool.sandbox_action,
                                     arguments,
@@ -2241,9 +2322,15 @@ class Runtime:
             result = provider.resolve(tool_name=tool_name, principal=principal, run_id=run_id)
             if not inspect.isawaitable(result):
                 raise TypeError
-            credentials = await asyncio.wait_for(
-                result, timeout=max(0.001, deadline - time.perf_counter())
-            )
+            remaining = deadline - time.perf_counter()
+            if remaining <= 0:
+                raise TimeoutError
+            credentials = await asyncio.wait_for(result, timeout=remaining)
+        except TimeoutError:
+            raise ToolError(
+                "Scoped credential resolution exceeded the tool deadline",
+                code=ToolErrorCode.DEADLINE_EXCEEDED,
+            ) from None
         except Exception as exc:
             raise ToolError(
                 "Scoped credentials could not be resolved", code=ToolErrorCode.TOOL_UNAVAILABLE

@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Gabby project scorecard
 
 This scorecard gives a consistent estimate of progress toward the production-grade OSS objective.
@@ -15,10 +31,9 @@ truth. Validate it and this report with `python scripts/check_scorecard.py`; CI 
 
 ## Historical snapshot (2026-10-03)
 
-This scorecard predates the November 2026 removal of local model manipulation, specialized
-ingestion parsers, PostgreSQL adapters, MCP integrations, and the OpenTelemetry adapter. Its
-percentages and detailed evidence describe the earlier tree; they are not a score or inventory of
-the current project. Recalculate the scorecard before using it to make current readiness claims.
+This scorecard is a historical snapshot. Its percentages and evidence describe an earlier tree and
+are not a score or inventory of the current project. Use the current, criterion-by-criterion
+[OpenSSF practice audit](OPENSSF_AUDIT.md) for present evidence and outstanding verification.
 
 | Category | Weight | Score | Main evidence and remaining work |
 |---|---:|---:|---|
@@ -39,107 +54,26 @@ a whole-category percentage change.
 
 ## Verification snapshot
 
-The run totals below are historical evidence for the tree at the time each run was performed; they
-do not verify the current ingestion-scope change. See ADR 0125 for the current supported formats.
+**Run date:** 2026-11-12
+**Environment:** Linux x86_64, Python 3.14.8
 
-Gabby specializes agent behavior through runtime configuration, policies, and governed execution.
-It does not train models, modify model weights, or load model adapters.
+The full coverage-enabled suite completed with **1,624 passed and 26 skipped**. Branch-aware
+coverage was **90.06%**, meeting the configured 90% gate. The final run completed without warnings.
 
-The latest Linux/Python 3.12.14 coverage-enabled run completed **1,765 passed, 37 skipped** in
-70.87 seconds. All executed tests passed, but branch-aware coverage measured **88.43%**, below the
-configured 90% gate, so the CI-equivalent command exits unsuccessfully. The added evaluation and
-retrieval-evaluation edge cases raised coverage from 87.94% to 88.38%; their focused suite passed
-79 tests. New cross-process SQLite journal tests verify 80 appends from four concurrent processes
-and recovery of an abandoned run after a worker exits. JSON Feed and streaming OPML parsing are
-included; Jina live hosted-provider acceptance skips unless the host sets its opt-in flag and API key.
-The live Linux sandbox matrix passed all **14** Docker/Podman CLI/API cases: 8 Docker and 6 Podman,
-including both workspace modes and per-run cleanup. The Docker Compose plugin is unavailable in
-this environment, so Compose and Nginx deployment gates were not rerun. macOS/Windows sandbox
-acceptance and hosted providers remain unverified here.
-Two earlier ordinary full-suite runs intermittently timed out in
-`test_cli_process_runner_captures_input_and_bounds_output`; it passes alone, with its full test
-module, and in the latest full-suite runs. The current source archive and wheel also build and pass the package-integrity checker, with the current package contents. All
-11 Parquet and both Kubernetes deployment contract cases passed. The Redis revocation adapter passed 10 fake-client
-contract cases and a live local Redis command acceptance cycle for shared checks, listing, reinstate,
-and fresh reads.
-The Anthropic provider's completion, streaming, and end-to-end tool cycle are covered by mock
-contract tests; its live acceptance is opt-in. The reusable approval-audit module has 93.30%. The CLI subprocess test passed alone, with its
-complete module (80 tests), and in the latest full-suite run. The
-revocation/API/runtime suite passed 44
-tests. The latest ingestion and public API suites passed 208 tests, including TOML indexing into
-SQLite.
-The static skill registry builder passed a client round-trip against its generated catalog and
-package artifacts. The vector-only PDF path was also verified by a real PDFium render and
-`FileIngestor` to SQLite integration. The previous four-version full-suite run passed 1,162 tests on
-Python 3.11, 3.12, 3.13, and 3.14 with 25 opt-in skips per version;
-its branch-aware coverage was 91.23% on Python 3.11 and 3.14, and 91.25% on Python 3.12 and 3.13.
-The suite covers
-bounded transient model retries,
-no replay after partial stream output, stable tool failure categories, handler-detail redaction, and propagation to model observations, traces, and SSE events alongside
-the named-pipe transport contract, Cohere reranking provider contracts,
-route-scoped authorization, versioned skill resolution, Hugging Face embeddings, cooperative tool
-cancellation, active skill-signer revocation cancellation through embedded and HTTP streaming calls, crash recovery, native Windows engine preflight, CSV/JSON/PDF ingestion and vector retrieval, and Windows
-live acceptance cases:
+Ruff check and formatting, mypy across source/tests/scripts/examples, documentation checks, license
+header checks (340 commentable files), workflow validation, scorecard validation, and
+uv lock --check passed. The Go SDK test command completed successfully and reported no Go test
+files. TypeScript type-checking passed. The source distribution and wheel built, passed
+scripts/check_package.py, and the installed wheel imported successfully. Focused tests for
+sandbox-pool lifecycle and worker error paths passed.
 
-- The latest coverage-enabled run recorded **1,765 passed and 37 skipped** on Linux/Python 3.12.14.
-  It failed the configured branch coverage gate at **88.43%** (minimum 90%). A Python 3.11.14 run
-  passed the same test count at 88.42%. The current host
-  passed all 14 Linux Docker/Podman live sandbox cases; the Docker Compose plugin is unavailable,
-  so Compose and ingress gates were not run.
-  Earlier four-version runs passed 1,162 tests per Python 3.11–3.14 environment and met the 90%
-  branch-aware coverage gate; these preceded the PDFium OCR addition.
-  Current full-suite coverage is 86% for the model providers, 89% for runtime, 83% for ingestion,
-  79% for the skill registry, and 76–77% for the two evaluation modules. Focused Anthropic provider
-  tests cover request conversion, completion and streaming tool calls, and a complete agent tool
-  cycle; real hosted acceptance is opt-in. Focused provider contract tests also cover SSE framing,
-  bounded UTF-8 responses, malformed data, and provider lifecycle behavior. Hybrid retrieval has
-  94% full-suite coverage, including shared active-generation filtering and fail-fast validation of
-  custom store generation-filter signatures. Regressions cover expiration before
-  execution and stable sandbox timeout, engine-unavailable, and output-limit codes in SSE and
-  traces; broader deadline and sandbox failure-path coverage remains a targeted follow-up.
-  The local embedding provider has 100% module coverage across 42 contract cases. The CLI suite has
-  25 passing cases and 99% module coverage, including run/serve contract checks and trusted-key
-  path replacement, truncation, and FIFO substitution regressions.
-  The API tests verify capacity admission
-  before request-body reads and hold the slot through response transmission.
-- The latest full suite had 37 opt-in skips, including live Linux Docker/Podman acceptance, Cohere
-  and Jina reranking, Ollama and Hugging Face endpoints, native
-  Windows Docker acceptance. A separate current-tree live run passed 8 Docker and 6 Podman cases
-  across CLI/API adapters and workspace modes. Native Windows integration did not run on this Linux
-  host.
-- Ruff check/format, source-package mypy, lockfile, workflow, scorecard, and documentation checks
-  pass on this worktree. The package source distribution and wheel build, and the wheel imports from an isolated
-  target install.
-- `pip-audit --skip-editable` reported no known vulnerabilities in the locked dependencies.
-- `uv lock --check` passed.
-- The runnable offline domain example completed customer-support, research, and data-analysis
-  executions.
-- The exact container Compose deployment passed local validation with checksum-verified Docker
-  Compose v5.5.1: it built and started healthy, ran as UID 10001 with a read-only root, dropped
-  capabilities, one CPU, 1 GiB memory, and 128 processes, returned HTTP 200 for health and 401 for
-  an unauthenticated run, and was then fully removed. The hosted CI gate is configured but has not
-  run remotely.
-- Current-worktree opt-in live sandbox acceptance passed on Linux with Docker and Podman: **14
-  passed** total, 8 Docker and 6 Podman cases across CLI/API adapters and workspace modes. The live
-  cases verify effective UID 65532 and cleanup after active-run cancellation. This verifies the
-  current worktree on Linux only.
-- The provider response-bound tests guard against multibyte UTF-8 overflows; Hugging Face embedding tests
-  cover bounded feature extraction, sanitized errors, and end-to-end coordinated SQLite retrieval.
-- Detached skill signature sidecars are opened and checked as bounded regular files before parsing;
-  regression coverage rejects oversized files and an atomic path replacement between metadata check
-  and open.
-- The detached skill-signing module has 92% combined coverage on the current suite, with
-  regressions for invalid and duplicate signature fields, package-content mismatch, unavailable
-  optional crypto support, and atomic signature-output failures.
-- The versioned-skill full-suite evidence includes exact pinning, dependency resolution, filesystem
-  selection of exact or unique versions, fail-closed ambiguity handling, and in-memory registry
-  selection of multiple versions across all supported Python versions.
-- Live completion/stream acceptance checks are available for Ollama and Hugging Face but were not
-  run; the local Ollama server was unavailable and Hugging Face was not opted in.
-- Cross-platform runs on macOS and Windows remain unverified in this environment.
-- CI and tagged-release workflows are configured for the full Python 3.11–3.14 cross-product on
-  Linux/macOS/Windows, and the workflow checker enforces that matrix. Configuration is not evidence
-  that the current worktree has passed those remote jobs.
+This host has no Rust toolchain, so cargo check --locked was not run. pip-audit could not reach
+PyPI because DNS/network access was unavailable. The configured CI matrix covers Linux, macOS, and
+Windows, but this session ran only on Linux; live Docker/Podman and hosted-provider tests were
+skipped, and remote checks for this worktree were unavailable. The local run therefore does not
+establish macOS/Windows or live-container acceptance.
 
-Keep this verification snapshot separate from the weighted product score. A green suite is evidence
-for covered criteria, not proof that the complete product objective is finished.
+The weighted score and category table above remain the dated **2026-10-03 historical snapshot**;
+they are not recalculated by this verification run. The current criterion-level status and
+outstanding work are in [OPENSSF_AUDIT.md](OPENSSF_AUDIT.md). A passing suite is evidence for
+covered behavior, not proof that every OpenSSF criterion or deployment environment is complete.

@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """CLI tests for signed skill package workflows."""
 
 from __future__ import annotations
@@ -32,7 +33,8 @@ from gabby.cli import _load_trusted_skill_keys, _resolve_trusted_skill_keys, mai
 from gabby.config import ConfigError, load_agent, load_skill
 from gabby.knowledge import Document, SQLiteFTS5Store
 from gabby.runtime import ExecutionResult
-from gabby.skill_packages import pack_skill
+from gabby.skill_packages import install_skill, pack_skill
+from gabby.skill_signing import sign_skill_package
 from gabby.tracing import ExecutionTrace
 
 
@@ -631,6 +633,7 @@ def test_cli_serve_forwards_bounded_options_and_token_from_environment(
         "request_body_timeout_seconds": 12.5,
         "max_response_bytes": 4096,
         "max_concurrent_runs": 4,
+        "warm_sandbox_pool_size": 0,
         "max_resumable_streams": None,
         "stream_session_ttl_seconds": 600.0,
         "stream_journal_path": tmp_path / "streams.sqlite3",
@@ -648,6 +651,7 @@ def test_cli_serve_forwards_bounded_options_and_token_from_environment(
         (["--port", "65536"], "Port must be between"),
         (["--bearer-token-env", "NOT-VALID"], "valid environment variable name"),
         (["--max-concurrent-runs", "0"], "positive integer"),
+        (["--warm-sandbox-pool-size", "65"], "from 0 through 64"),
         (["--max-resumable-streams", "0"], "positive integer"),
         (["--stream-session-ttl", "nan"], "finite positive number"),
         (["--max-request-bytes", "0"], "positive integer"),
@@ -886,6 +890,55 @@ def test_cli_sign_verify_and_require_trusted_key_for_install(
     )
     audit_record = json.loads(capsys.readouterr().out)
     assert audit_record["status"] == "verified"
+
+
+def test_cli_agent_commands_accept_trust_keys_for_installed_signed_skills(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pytest.importorskip("cryptography.hazmat.primitives.asymmetric.ed25519")
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    key = Ed25519PrivateKey.generate()
+    private_key = key.private_bytes(
+        serialization.Encoding.Raw,
+        serialization.PrivateFormat.Raw,
+        serialization.NoEncryption(),
+    )
+    public_key = key.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
+    skill_source = tmp_path / "skill-source"
+    skill_source.mkdir()
+    (skill_source / "skill.yaml").write_text(
+        "name: support-review\nversion: 1.0.0\ndescription: Review support cases\n",
+        encoding="utf-8",
+    )
+    archive = tmp_path / "support-review.gabskill"
+    pack_skill(skill_source, archive)
+    sign_skill_package(archive, key_id="publisher", private_key=private_key)
+    registry = tmp_path / "registry"
+    install_skill(archive, registry, trusted_keys={"publisher": public_key})
+    trust_directory = tmp_path / "trusted-keys"
+    trust_directory.mkdir()
+    (trust_directory / "publisher.pub").write_bytes(public_key)
+
+    agent_path = tmp_path / "agent.yaml"
+    agent_path.write_text(
+        "name: support-agent\n"
+        "model:\n  provider: openai_compatible\n  model: example-model\n"
+        "skills: [support-review@1.0.0]\n"
+        f"skill_paths: [{registry.as_posix()}]\n",
+        encoding="utf-8",
+    )
+
+    assert main(["validate", str(agent_path)]) == 2
+    assert "host SkillTrustPolicy" in capsys.readouterr().err
+    assert main(["validate", str(agent_path), "--trusted-key-dir", str(trust_directory)]) == 0
+    assert "is valid" in capsys.readouterr().out
+    assert main(["skills", str(agent_path), "--trusted-key-dir", str(trust_directory)]) == 0
+    assert "support-review@1.0.0" in capsys.readouterr().out
 
 
 def test_cli_pack_and_unsigned_install(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

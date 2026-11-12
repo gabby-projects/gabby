@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Roadmap
 
 Gabby is an **Agent Runtime and Governance Framework**. It governs a configured agent's model and
@@ -18,6 +34,9 @@ for the current product boundary.
   explicit runtime policies.
 - Governed tool execution with bounded calls, deadlines, cancellation, optional host approval,
   verification, tracing, and optional per-run container isolation for supported tools.
+- Optional MCP client/server integration, OpenTelemetry spans, signed audit records, LF TRACE
+  evidence, and lightweight HTTP adapters for LangGraph, CrewAI, and n8n. These integrations remain
+  optional and do not replace the host application's orchestration or deployment responsibilities.
 - Knowledge retrieval through injected retrievers, SQLite FTS5 lexical search and SQLite vector
   search, replaceable embedding and reranking providers, and built-in UTF-8 plain-text and Markdown
   ingestion. Specialized formats require a host-provided parser.
@@ -37,8 +56,12 @@ for the current product boundary.
   user-specific configuration, retrieval scope, and storage.
 - Built-in persistence is SQLite and is intended for local or single-service use. Gabby does not
   ship PostgreSQL storage adapters.
-- Gabby does not ship an MCP server or client integration, or a built-in OpenTelemetry exporter.
-  Hosts can implement external integrations through the documented extension interfaces.
+- MCP, OpenTelemetry, signed audit, and orchestrator adapters are optional integrations. They do not
+  make Gabby a multi-agent workflow orchestrator or replace host ownership of identity, state,
+  credentials, deployment, and telemetry retention.
+- The starter skill bundles, prewarmed sandbox pool, and TypeScript, Go, and Rust clients are under
+  development in the current work branch. Their presence in this checkout is not evidence of a
+  published, signed release or production acceptance.
 
 ## Work to prioritize
 

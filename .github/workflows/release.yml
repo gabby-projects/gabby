@@ -1,3 +1,17 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 name: Release
 
 on:
@@ -12,6 +26,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  starter-bundles:
+    needs: [build, client-sdks]
+    if: ${{ vars.GABBY_STARTER_BUNDLE_SIGNING_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: starter-bundle-signing
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - run: python -m pip install uv==0.13.5
+      - run: uv sync --frozen --extra skill-signing
+      - name: Build and verify signed starter bundles
+        env:
+          GABBY_STARTER_SIGNING_KEY: ${{ secrets.GABBY_STARTER_SIGNING_KEY }}
+          GABBY_STARTER_SIGNING_KEY_ID: ${{ vars.GABBY_STARTER_SIGNING_KEY_ID }}
+        run: uv run --no-sync python scripts/build_starter_bundles.py --output dist/starter-bundles
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gabby-signed-starter-bundles-${{ github.ref_name }}
+          path: dist/starter-bundles/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Attach starter bundles to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -d '' assets < <(find dist/starter-bundles -type f -print0)
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "No starter bundle assets were generated" >&2
+            exit 1
+          fi
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --verify-tag --generate-notes
+          fi
+
   platform:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -149,6 +206,33 @@ jobs:
           path: sbom/gabby-runtime-sbom.cdx.json
           if-no-files-found: error
           retention-days: 90
+
+  client-sdks:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Package TypeScript, Go, and Rust clients
+        run: |
+          mkdir -p dist/client-sdks
+          tar -czf "dist/client-sdks/gabby-typescript-sdk-${GITHUB_REF_NAME}.tar.gz" -C sdks/typescript .
+          tar -czf "dist/client-sdks/gabby-go-sdk-${GITHUB_REF_NAME}.tar.gz" -C sdks/go .
+          tar -czf "dist/client-sdks/gabby-rust-sdk-${GITHUB_REF_NAME}.tar.gz" -C sdks/rust .
+      - name: Attach client SDK archives to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -d '' assets < <(find dist/client-sdks -type f -print0)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --verify-tag --generate-notes
+          fi
 
   publish:
     needs: build

@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Runtime integrations
 
 Gabby can sit behind an orchestration framework through its stateless HTTP and SSE API. The
@@ -60,7 +76,9 @@ records successful tool-policy decisions, explicit policy denials, and persona-v
 without recording prompts, tool arguments, verifier details, or model output. Install
 `gabby-agent-runtime[skill-signing]`; provide a protected 32-byte private key. It verifies a
 pre-existing chain before appending. Anchor exported chain heads outside the process if you need to
-detect full-file replacement.
+detect full-file replacement. Call `exporter.close()` during host shutdown to release its
+writer ownership. A single exporter must own a given audit path; a second active writer for the
+same resolved path is rejected so concurrent processes cannot fork the hash chain.
 
 For LF TRACE v0.2 Trust Records, install `gabby-agent-runtime[trace]` and configure
 `LFTraceExporter(directory, claims=..., private_key=..., audit_exporter=...)`. Supply the signed

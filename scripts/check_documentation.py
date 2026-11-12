@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Validate public Python documentation, comment hygiene, and Markdown links."""
 
 from __future__ import annotations
@@ -116,7 +117,15 @@ def markdown_errors(path: Path) -> list[str]:
     """Find missing document headings, unbalanced fences, and broken local links."""
     lines = path.read_text(encoding="utf-8").splitlines()
     errors: list[str] = []
-    content_lines = [line.strip() for line in lines if line.strip()]
+    heading_start = 0
+    while heading_start < len(lines) and not lines[heading_start].strip():
+        heading_start += 1
+    if heading_start < len(lines) and lines[heading_start].strip().startswith("<!--"):
+        for index in range(heading_start + 1, len(lines)):
+            if "-->" in lines[index]:
+                heading_start = index + 1
+                break
+    content_lines = [line.strip() for line in lines[heading_start:] if line.strip()]
     first = content_lines[0] if content_lines else ""
     starts_with_h1 = first.startswith("# ") or (
         path == ROOT / "README.md"

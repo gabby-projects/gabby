@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Agent and skill YAML loading failures and defaults."""
 
 from __future__ import annotations
@@ -500,11 +501,19 @@ def test_builtin_model_endpoint_rejects_insecure_or_malformed_urls(endpoint: str
         {"base_url": "https://user:password@models.example/v1"},
         {"base_url": "https://models.example/v1?api_key=secret"},
         {"base_url": "https://models.example:invalid/v1"},
+        {"adapter_id": "persona-style"},
+        {"adapter_revision": "r1"},
     ],
 )
 def test_model_credentials_and_malformed_urls_are_rejected(model: dict[str, object]) -> None:
     with pytest.raises(ConfigError):
         validate_model_credentials(model)
+
+
+@pytest.mark.parametrize("field", ["adapter_id", "adapter_revision"])
+def test_removed_model_adapter_settings_fail_clearly(field: str) -> None:
+    with pytest.raises(ConfigError, match="does not load or apply model adapters"):
+        validate_model_credentials({"provider": "huggingface", field: "legacy-value"})
 
 
 def test_model_credentials_allow_safe_environment_names_and_custom_http_transport() -> None:

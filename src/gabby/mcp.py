@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,12 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Optional MCP client and server adapters."""
 
 from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
+from contextlib import asynccontextmanager
 from typing import Any
 
 from .config import _validate_output_schema
@@ -25,10 +27,50 @@ from .tools import Tool, ToolRegistry
 
 def _client_type() -> Any:
     try:
-        from mcp import Client
+        from mcp.client.session import ClientSession
+        from mcp.client.streamable_http import streamable_http_client
     except ImportError as exc:
         raise RuntimeError("MCP support requires gabby-agent-runtime[mcp]") from exc
-    return Client
+
+    @asynccontextmanager
+    async def open_client(url: str) -> Any:
+        async with (
+            streamable_http_client(url) as (read_stream, write_stream, _),
+            ClientSession(read_stream, write_stream) as session,
+        ):
+            await session.initialize()
+            yield session
+
+    return open_client
+
+
+def _mcp_tool_handler(
+    client_factory: Callable[[str], Any], server_url: str, remote_name: str
+) -> Callable[..., Any]:
+    """Bind immutable MCP routing data outside the model-controlled argument mapping."""
+
+    async def invoke(**arguments: Any) -> Any:
+        async with client_factory(server_url) as active_client:
+            result = await active_client.call_tool(remote_name, arguments)
+        if getattr(result, "isError", False):
+            raise RuntimeError("MCP tool server reported a tool error")
+        structured = getattr(result, "structuredContent", None)
+        if structured is not None:
+            return structured
+        blocks = getattr(result, "content", [])
+        return {
+            "content": [
+                block.model_dump(mode="json")
+                if callable(getattr(block, "model_dump", None))
+                else {
+                    "type": getattr(block, "type", "unknown"),
+                    "text": getattr(block, "text", ""),
+                }
+                for block in blocks
+            ]
+        }
+
+    return invoke
 
 
 async def load_mcp_tools(
@@ -71,35 +113,12 @@ async def load_mcp_tools(
             if not isinstance(description, str) or len(description.encode("utf-8")) > 8192:
                 raise ValueError(f"MCP tool {name!r} description exceeds 8 KiB")
 
-            async def invoke(
-                _server_url: str = url, _remote_name: str = remote_name, **arguments: Any
-            ) -> Any:
-                async with client_factory(_server_url) as active_client:
-                    result = await active_client.call_tool(_remote_name, arguments)
-                if getattr(result, "isError", False):
-                    raise RuntimeError("MCP tool server reported a tool error")
-                structured = getattr(result, "structuredContent", None)
-                if structured is not None:
-                    return structured
-                blocks = getattr(result, "content", [])
-                return {
-                    "content": [
-                        block.model_dump(mode="json")
-                        if callable(getattr(block, "model_dump", None))
-                        else {
-                            "type": getattr(block, "type", "unknown"),
-                            "text": getattr(block, "text", ""),
-                        }
-                        for block in blocks
-                    ]
-                }
-
             registry.register(
                 Tool(
                     name=name,
                     description=f"MCP tool from {server_name}: {description}",
                     parameters=parameters,
-                    handler=invoke,
+                    handler=_mcp_tool_handler(client_factory, url, remote_name),
                     output_schema={},
                 )
             )

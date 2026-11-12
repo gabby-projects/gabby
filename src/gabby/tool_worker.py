@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Sandbox image entry point for importable Python tool handlers."""
 
 from __future__ import annotations
@@ -52,9 +53,10 @@ def main(argv: list[str] | None = None) -> int:
         request = json.loads(Path(request_path).read_text(encoding="utf-8"))
         if not isinstance(request, dict):
             raise ValueError("tool arguments must be an object")
-        handler = _load_handler(reference)
-        # Tool code may write diagnostics to stdout; keep the worker protocol unambiguous.
+        # Imports can execute module-level code that writes to stdout. Keep both import and
+        # handler diagnostics away from the one-line JSON worker protocol.
         with contextlib.redirect_stdout(sys.stderr):
+            handler = _load_handler(reference)
             result = asyncio.run(_invoke(handler, request))
         response = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     except Exception:

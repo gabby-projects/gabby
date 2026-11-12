@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Architecture Decision Records
 
 ADRs record decisions that change public contracts, concurrency and lifecycle semantics, dependency direction, security assumptions, or hosting behavior. The project architect reviews these decisions; implementation changes should link the accepted ADR and update the user guide that explains how to use the behavior.
@@ -125,3 +141,7 @@ decisions and do not imply that their specialized parsers remain in the runtime.
 - [Validated skill input and output schemas](0123-validated-skill-io-schemas.md)
 - [Injectable policy engine](0124-injectable-policy-engine.md)
 - [Plain-text and Markdown ingestion scope](0125-plain-text-markdown-ingestion.md)
+- [Optional MCP, telemetry, and orchestrator integrations](0126-optional-mcp-telemetry-orchestrator-integrations.md)
+- [Release-signed starter skill bundles](0127-release-signed-starter-skill-bundles.md)
+- [Optional warm sandbox container pool](0128-optional-warm-sandbox-container-pool.md)
+- [Template-generated language SDKs](0129-template-generated-language-sdks.md)

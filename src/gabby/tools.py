@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Explicitly registered tools and runtime-enforced tool permissions."""
 
 from __future__ import annotations
@@ -395,12 +396,12 @@ class PolicyEngine:
         scope_rules = policies.get("scope_rules", {})
         if not isinstance(scope_rules, Mapping):
             raise ValueError("policies.scope_rules must be a mapping")
+        matched = [
+            rule
+            for scope, rule in scope_rules.items()
+            if principal is not None and scope in principal.scopes
+        ]
         if any("allowed_tools" in rule for rule in scope_rules.values()):
-            matched = [
-                rule
-                for scope, rule in scope_rules.items()
-                if principal is not None and scope in principal.scopes
-            ]
             scoped_tools = {name for rule in matched for name in rule.get("allowed_tools", [])}
             # Configured base grants remain an upper bound; token scopes can only narrow them.
             self.allowed_tools.intersection_update(scoped_tools)

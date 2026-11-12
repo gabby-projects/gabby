@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Runtime context, retrieval, verification, and failure contracts."""
 
 from __future__ import annotations
@@ -82,6 +83,7 @@ def _agent(
     planner: Any = None,
     tracer: Any = None,
     policy_engine_factory: Any = None,
+    credential_provider: Any = None,
     global_instructions: str = "",
 ) -> Agent:
     effective_policies = {"max_steps": 4, "timeout_seconds": 1, "require_sandbox": False}
@@ -111,6 +113,7 @@ def _agent(
         planner=planner,
         tracer=tracer,
         policy_engine_factory=policy_engine_factory,
+        credential_provider=credential_provider,
         global_instructions=global_instructions,
     )
 
@@ -235,6 +238,23 @@ async def test_verified_scope_rules_restrict_tool_and_permission_grants() -> Non
         await policy.authorize_permissions("read", ["records:write"])
 
 
+@pytest.mark.asyncio
+async def test_permission_only_scope_rule_does_not_require_tool_scope_grant() -> None:
+    policy = await DefaultPolicyEngineFactory().create(
+        declared_tools=["read"],
+        environment_allowed=None,
+        principal=Principal("alice", frozenset({"records:reader"})),
+        policies={
+            "allowed_tools": ["read"],
+            "allowed_permissions": ["records:read"],
+            "scope_rules": {"records:reader": {"allowed_permissions": ["records:read"]}},
+        },
+    )
+
+    await policy.authorize_tool("read")
+    await policy.authorize_permissions("read", ["records:read"])
+
+
 def test_verified_scope_can_add_configured_persona_guidance() -> None:
     agent = _agent(
         SequenceModel(ModelResponse(content="unused")),
@@ -273,6 +293,129 @@ async def test_run_usage_circuit_breakers_stop_over_budget(
     with pytest.raises(AgentRuntimeError, match=message):
         await agent.arun("Do one task")
     assert len(model.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_token_budget_sums_mixed_provider_aliases_across_model_calls() -> None:
+    tools = ToolRegistry()
+    tools.register(
+        Tool(
+            name="lookup",
+            description="Look up an approved record.",
+            parameters={"type": "object", "properties": {}},
+            handler=lambda: {"status": "found"},
+            output_schema=_ANY_JSON_SCHEMA,
+        )
+    )
+    model = SequenceModel(
+        ModelResponse(
+            tool_calls=[_tool_call("lookup")],
+            usage={"prompt_tokens": 3, "completion_tokens": 1},
+        ),
+        ModelResponse(content="done", usage={"input_tokens": 3, "output_tokens": 2}),
+    )
+    agent = _agent(
+        model,
+        policies={"max_total_tokens": 8},
+        tools=tools,
+        tool_names=["lookup"],
+    )
+
+    with pytest.raises(AgentRuntimeError, match="max_total_tokens=8"):
+        await agent.arun("look up the record")
+
+    assert len(model.calls) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["selector", "planner"])
+async def test_token_budget_fails_closed_when_auxiliary_model_omits_usage(stage: str) -> None:
+    model = SequenceModel(ModelResponse(content="reasoning must not run"))
+    selector = None
+    planner = None
+    skills = None
+    if stage == "selector":
+
+        class MissingUsageSelector:
+            async def select(self, **_: Any) -> SkillSelection:
+                return SkillSelection((), model="selector-v1")
+
+        skills = [SkillDefinition(name="review")]
+        selector = MissingUsageSelector()
+    else:
+
+        class MissingUsagePlanner:
+            async def plan(self, **_: Any) -> PlanningResult:
+                return PlanningResult(
+                    ExecutionPlan("bounded plan", (PlanStep("review", "done"),)),
+                    model="planner-v1",
+                )
+
+        planner = MissingUsagePlanner()
+    agent = _agent(
+        model,
+        policies={"max_total_tokens": 100},
+        skills=skills,
+        skill_selector=selector,
+        planner=planner,
+    )
+
+    with pytest.raises(AgentRuntimeError, match="omitted token usage"):
+        await agent.arun("review this request")
+
+    assert model.calls == []
+
+
+@pytest.mark.asyncio
+async def test_scoped_tools_narrow_model_capabilities_without_aborting_the_run() -> None:
+    tools = ToolRegistry()
+    for name in ("read", "delete"):
+        tools.register(
+            Tool(
+                name=name,
+                description=f"{name} an approved record.",
+                parameters={"type": "object", "properties": {}},
+                handler=lambda: {"status": "ok"},
+                output_schema=_ANY_JSON_SCHEMA,
+            )
+        )
+    model = SequenceModel(ModelResponse(content="read-only result"))
+    agent = _agent(
+        model,
+        policies={
+            "scope_rules": {"records:reader": {"allowed_tools": ["read"]}},
+        },
+        tools=tools,
+        tool_names=["read", "delete"],
+    )
+
+    result = await agent.arun(
+        "read the record", principal=Principal("alice", frozenset({"records:reader"}))
+    )
+
+    assert result.output == "read-only result"
+    assert [item["function"]["name"] for item in model.calls[0]["tools"]] == ["read"]
+
+
+@pytest.mark.asyncio
+async def test_scoped_credential_provider_cannot_exceed_tool_deadline() -> None:
+    class SlowCredentials:
+        async def resolve(self, **_: Any) -> dict[str, str]:
+            await asyncio.sleep(1)
+            return {"SERVICE_TOKEN": "should-not-be-used"}
+
+    runtime = Runtime(
+        _agent(
+            SequenceModel(ModelResponse(content="unused")), credential_provider=SlowCredentials()
+        )
+    )
+
+    with pytest.raises(ToolError) as error:
+        await runtime._resolve_sandbox_credentials(
+            "sandboxed_action", Principal("alice"), "run-1", time.perf_counter() + 0.01
+        )
+
+    assert error.value.code == ToolErrorCode.DEADLINE_EXCEEDED
 
 
 @pytest.mark.asyncio

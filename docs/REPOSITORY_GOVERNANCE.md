@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Repository governance and branch protection
 
 Gabby uses reviewed pull requests, automated checks, and protected branches to maintain the
@@ -31,8 +47,9 @@ incident or release record.
 After CI is installed, open a successful pull request and select the exact status-check names shown
 by GitHub. Do not guess check names. Require the Python 3.11, 3.12, 3.13, and 3.14 quality jobs;
 enable CodeQL and Scorecard as merge checks only after their pull-request results are reliable.
-Repository settings cannot be enforced by workflow files alone. Confirm the configured code-owner
-team exists and has write access to this repository before making code-owner approval a required rule.
+Repository settings cannot be enforced by workflow files alone. Confirm each configured code owner
+(user or team) exists and has the required repository access before making code-owner approval a
+required rule.
 Track this and other repository-owned controls in the [maintainer handoff](../HANDOFF.md).
 
 ## Workflow and supply-chain policy
