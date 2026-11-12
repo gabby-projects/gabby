@@ -27,3 +27,4 @@ coverage.xml
 htmlcov/
 .tox/
 AGENTS.md
+sdks/rust/target/

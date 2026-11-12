@@ -222,7 +222,7 @@ jobs:
           mkdir -p dist/client-sdks
           tar -czf "dist/client-sdks/gabby-typescript-sdk-${GITHUB_REF_NAME}.tar.gz" -C sdks/typescript .
           tar -czf "dist/client-sdks/gabby-go-sdk-${GITHUB_REF_NAME}.tar.gz" -C sdks/go .
-          tar -czf "dist/client-sdks/gabby-rust-sdk-${GITHUB_REF_NAME}.tar.gz" -C sdks/rust .
+          tar --exclude=./target -czf "dist/client-sdks/gabby-rust-sdk-${GITHUB_REF_NAME}.tar.gz" -C sdks/rust .
       - name: Attach client SDK archives to the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
