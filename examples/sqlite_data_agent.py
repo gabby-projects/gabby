@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Run a stateless data agent against a read-only, application-owned SQLite database."""
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import asyncio
 import json
 import sqlite3
 import tempfile
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -73,7 +75,7 @@ async def run_example() -> str:
     """Create sample data, run the agent, then discard the request and database state."""
     with tempfile.TemporaryDirectory(prefix="gabby-sqlite-example-") as directory:
         database = Path(directory) / "sales.sqlite3"
-        with sqlite3.connect(database) as connection:
+        with closing(sqlite3.connect(database)) as connection, connection:
             connection.executescript(
                 "CREATE TABLE sales (region TEXT, amount REAL);"
                 "INSERT INTO sales VALUES ('north', 15.5), ('north', 24.5), ('south', 7);"

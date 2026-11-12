@@ -1,4 +1,48 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Scaling and operational tradeoffs
+
+## Prewarmed sandbox pools
+
+The FastAPI service can prestart a bounded number of single-use Linux containers for an agent's
+configured sandbox profile. Enable it with `warm_sandbox_pool_size` in `create_app` or `serve`, or
+`--warm-sandbox-pool-size` in the CLI. The pool starts before the app accepts requests, leases a
+ready container to one run, destroys that container after use, and replenishes the idle pool. If
+all warm containers are busy, the server starts a normal per-run container.
+
+The pool is opt-in and accepts sizes from 1 through 64. It requires Linux, a configured sandbox,
+and no configured host workspace mount. Requests that need temporary per-run tool-input mounts also
+use normal startup. No container is reused between different requests. Idle containers consume
+daemon capacity; the configured size applies to each worker process, so multiply it by the worker
+count when estimating the total idle container count. Measure latency and resource use under the
+deployment's actual concurrency.
+
+```python
+app = create_app(
+    agent,
+    authenticator=authenticator,
+    max_concurrent_runs=16,
+    warm_sandbox_pool_size=4,
+)
+```
+
+Workspace-mounted and Python-tool runs bypass the pool and retain ordinary per-run creation and
+cleanup. The pool currently benefits workspace-free sandbox profiles without per-run tool-input
+mounts, such as shell-only agents.
 
 This guide maps common production concerns to Gabby's current controls, limits, and deployment
 choices. It distinguishes behavior implemented in Gabby from decisions and infrastructure owned by

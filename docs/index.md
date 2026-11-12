@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Gabby Documentation
 
 This is the entry point for Gabby's user, architecture, operator, and contributor documentation.
@@ -22,6 +38,8 @@ roadmap and scorecard separate implementation from release evidence.
 - [CLI and API guide](../README.md#cli-and-api) — use the `gabby` developer command line and
   local service.
 - [Python HTTP client](CLIENT.md) — call the stateless HTTP API from another Python application.
+- [Multi-language HTTP/SSE clients](../sdks/README.md) — call Gabby from TypeScript/Node.js, Go,
+  or Rust.
 - [Runtime integrations](INTEGRATIONS.md) — connect MCP servers, OpenTelemetry, signed audit
   evidence, LangGraph, CrewAI, and n8n.
 
@@ -41,6 +59,8 @@ roadmap and scorecard separate implementation from release evidence.
 
 ## Capabilities
 
+- [Starter skill bundles](../bundles/README.md) — reviewed source templates and signed release
+  bundle installation.
 - [Skill registry](SKILL_REGISTRY.md) — skill structure, exact versions, packages, signatures,
   trust, and registry operations.
 - [Structured output](STRUCTURED_OUTPUT.md) — JSON Schema contracts for agent responses.

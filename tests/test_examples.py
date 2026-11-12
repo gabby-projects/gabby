@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Acceptance checks for runnable, user-facing examples."""
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import AsyncIterator
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -105,7 +107,7 @@ async def test_approval_audit_example_records_decision_without_raw_arguments(
 
     assert decision.approved is True
     assert received == [request]
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         row = connection.execute(
             "SELECT run_id, call_id, tool_name, principal_subject, "
             "arguments_sha256, approved FROM gabby_tool_approval_audit"

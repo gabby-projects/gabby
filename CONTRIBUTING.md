@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Contributing to Gabby
 
 Gabby is an agent construction and runtime framework. Contributions should preserve the boundary
@@ -26,13 +42,15 @@ Gabby supports Python 3.11 through 3.14. Use the committed lockfile for developm
 
 ```bash
 python -m pip install uv==0.13.5
-uv sync --frozen --group dev --extra server --extra auth --extra transformers \
-  --extra observability --extra skill-signing --extra windows-sandbox
+uv sync --frozen --group dev --extra server --extra auth --extra skill-signing
 uv lock --check
 ```
 
-The repository uses Python 3.11.14 as its local default (`.python-version`) and tests the full
-supported 3.11–3.14 range in CI. To install the shared local hooks, install `pre-commit` in your
+Choose a Python version from the supported 3.11–3.14 range; the repository does not pin a local
+interpreter version. On Windows, add `--extra windows-sandbox` to install the optional Docker
+transport dependency. To work on an optional integration, install its matching `mcp`,
+`opentelemetry`, `trace`, or `crewai` extra. CI installs only the common test and runtime extras.
+To install the shared local hooks, install `pre-commit` in your
 developer environment and run `pre-commit install`; run `pre-commit run --all-files` before opening
 a pull request.
 

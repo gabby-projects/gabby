@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,10 +9,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Pre-provider and post-provider model payload filtering contracts."""
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Awaitable, Mapping, Sequence
 from typing import Any, Protocol
@@ -118,10 +120,31 @@ class DefaultPayloadFilter:
     def filter_response(self, *, response: ModelResponse, purpose: str) -> ModelResponse:
         """Redact common sensitive patterns from returned text and raw provider data."""
         del purpose
+        content = response.content
+        if content is not None:
+            try:
+                structured = json.loads(content)
+            except (json.JSONDecodeError, RecursionError):
+                content = redact_sensitive_text(content)
+            else:
+                # Preserve valid JSON as JSON while redacting string values. Leave object keys
+                # untouched because changing a key can alter the caller's structured contract.
+                def redact_json_values(value: Any) -> Any:
+                    if isinstance(value, str):
+                        return redact_sensitive_text(value)
+                    if isinstance(value, list):
+                        return [redact_json_values(item) for item in value]
+                    if isinstance(value, dict):
+                        return {key: redact_json_values(item) for key, item in value.items()}
+                    return value
+
+                content = json.dumps(
+                    redact_json_values(structured),
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
         return ModelResponse(
-            content=(
-                redact_sensitive_text(response.content) if response.content is not None else None
-            ),
+            content=content,
             # Tool arguments are structured operations; changing them after the model returns can
             # silently alter a requested action. Hosts can add a filter that validates or rejects
             # tool arguments without rewriting them.

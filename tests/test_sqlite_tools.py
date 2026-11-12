@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,12 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Read-only and bounded behavior for the built-in SQLite data tool."""
 
 from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +29,7 @@ from gabby import sqlite_tools as sqlite_tools_module
 
 
 def _database(path: Path) -> Path:
-    with sqlite3.connect(path) as connection:
+    with closing(sqlite3.connect(path)) as connection, connection:
         connection.executescript(
             "CREATE TABLE sales (region TEXT, amount REAL);"
             "INSERT INTO sales VALUES ('north', 10), ('north', 20), ('south', 7);"
@@ -87,7 +89,7 @@ def test_sqlite_tool_rejects_mutation_pragma_attach_and_extension_loading(
         _invoke(tool, path, sql)
 
     assert caught.value.code in {ToolErrorCode.POLICY_DENIED, ToolErrorCode.EXECUTION_FAILED}
-    with sqlite3.connect(path) as connection:
+    with closing(sqlite3.connect(path)) as connection, connection:
         assert connection.execute("SELECT count(*) FROM sales").fetchone() == (3,)
 
 

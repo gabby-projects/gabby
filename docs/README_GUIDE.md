@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Gabby User Guide
 
 This guide explains how to use Gabby's agent runtime and governance capabilities: installation, configuration, providers, skills, runtime policies, knowledge, tools, and APIs. The top-level README is the project overview and quick-start entry point.
@@ -676,11 +692,13 @@ policies:
 ```
 
 For per-user adaptation, the host authenticates the caller and selects that user's configuration
-and retrieval scope. The retriever contract receives the request text and result limit, not an
-authenticated user identity, so inject a retriever already scoped to the caller or supply validated
-user context through `RunRequest.context` / `RunRequest.memory`. Never use an untrusted request field
-as the identity or tenant boundary. The host owns storage and persistence of user preferences because
-Gabby is stateless between runs.
+and retrieval scope. Supplying validated preferences through `RunRequest.context` or
+`RunRequest.memory` can personalize a request without retrieval. Those fields do not filter retrieved
+documents: for private or tenant-specific documents, the host must inject a retriever already scoped
+to the authenticated caller. The retriever contract receives the request text and result limit, not
+an authenticated user identity. Never use an untrusted request field as the identity or tenant
+boundary. The host owns storage and persistence of user preferences because Gabby is stateless
+between runs.
 
 RAG supplies relevant context; it does not enforce a character or policy. Gabby marks retrieved
 documents as untrusted reference data, while configured instructions shape the response and runtime

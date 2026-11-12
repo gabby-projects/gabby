@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Loading and validating agent and skill definitions."""
 
 from __future__ import annotations
@@ -90,6 +91,10 @@ _MAX_SANDBOX_ID = 2**32 - 1
 def validate_model_credentials(model: Mapping[str, Any], *, provider: str | None = None) -> None:
     """Reject model credentials embedded in agent configuration mappings."""
     selected_provider = provider or model.get("provider", "openai_compatible")
+    removed_adapter_fields = sorted({"adapter_id", "adapter_revision"}.intersection(model))
+    if removed_adapter_fields:
+        names = ", ".join(f"model.{name}" for name in removed_adapter_fields)
+        raise ConfigError(f"{names} are unsupported; Gabby does not load or apply model adapters")
     if selected_provider == "anthropic" and "max_tokens" in model:
         max_tokens = model["max_tokens"]
         if (
@@ -445,6 +450,7 @@ class ResolvedAgentDefinition:
     persona_prompt: str
     policies: Mapping[str, Any]
     verification: Mapping[str, Any]
+    mcp: Mapping[str, Any]
     sandbox: SandboxDefinition | None
     source_path: Path | None
     skill_definitions: tuple[ResolvedSkillDefinition, ...]
@@ -734,6 +740,7 @@ def resolve_agent_definition(
             "persona": definition.persona,
             "policies": definition.policies,
             "verification": definition.verification,
+            "mcp": definition.mcp,
             "output_schema": definition.output_schema,
             "sandbox": sandbox_config,
         }
@@ -775,6 +782,7 @@ def resolve_agent_definition(
         persona_prompt=persona_prompt,
         policies=frozen_config["policies"],
         verification=frozen_config["verification"],
+        mcp=frozen_config["mcp"],
         output_schema=frozen_config["output_schema"],
         sandbox=definition.sandbox,
         source_path=definition.source_path,

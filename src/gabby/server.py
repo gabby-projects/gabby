@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """FastAPI transport for stateless agent execution."""
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ import stat
 import time
 from collections.abc import AsyncIterator, Callable
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager, closing, suppress
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -42,6 +43,7 @@ from .agent import Agent
 from .auth import Authenticator, BearerTokenAuthenticator, Principal
 from .host_context import HostContext
 from .runtime import MAX_RUN_INPUT_CHARS, AgentRuntimeError, StreamEventType
+from .sandbox_pool import WarmSandboxPool
 from .skill_trust import SkillIntegrityError, SkillRevocationUnavailable, SkillRevokedError
 
 _bearer_security = HTTPBearer(auto_error=False)
@@ -723,7 +725,7 @@ class _SQLiteStreamJournal:
                 os.fchmod(descriptor, 0o600)
         finally:
             os.close(descriptor)
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """CREATE TABLE IF NOT EXISTS gabby_stream_sessions (
                     session_key TEXT PRIMARY KEY,
@@ -813,7 +815,7 @@ class _SQLiteStreamJournal:
         active_ttl_seconds: float,
     ) -> StreamJournalSnapshot:
         now = time.time()
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             self._recover_expired_sync(connection, now=now, active_ttl_seconds=active_ttl_seconds)
             connection.execute(
@@ -890,7 +892,7 @@ class _SQLiteStreamJournal:
         )
 
     def _append_sync(self, key: str, frame: bytes, max_bytes: int) -> bool:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 "SELECT frame_count, total_bytes, finished_at "
@@ -916,7 +918,7 @@ class _SQLiteStreamJournal:
         return await self._call(self._append_sync, key, frame, max_bytes)
 
     def _finish_sync(self, key: str) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 "UPDATE gabby_stream_sessions SET finished_at=? "
                 "WHERE session_key=? AND finished_at IS NULL",
@@ -927,7 +929,7 @@ class _SQLiteStreamJournal:
         await self._call(self._finish_sync, key)
 
     def _read_after_sync(self, key: str, cursor: int) -> tuple[list[bytes], bool]:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 "SELECT frame FROM gabby_stream_events "
                 "WHERE session_key=? AND event_id>? ORDER BY event_id",
@@ -942,7 +944,7 @@ class _SQLiteStreamJournal:
         return await self._call(self._read_after_sync, key, cursor)
 
     def _reap_sync(self, ttl_seconds: float, active_ttl_seconds: float) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             now = time.time()
             connection.execute("BEGIN IMMEDIATE")
             self._recover_expired_sync(connection, now=now, active_ttl_seconds=active_ttl_seconds)
@@ -956,7 +958,7 @@ class _SQLiteStreamJournal:
         await self._call(self._reap_sync, ttl_seconds, active_ttl_seconds)
 
     def _remove_sync(self, key: str) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute("DELETE FROM gabby_stream_sessions WHERE session_key=?", (key,))
 
     async def remove(self, key: str) -> None:
@@ -1115,6 +1117,7 @@ def create_app(
     authenticator_timeout_seconds: float = DEFAULT_AUTHENTICATOR_TIMEOUT_SECONDS,
     max_response_bytes: int = DEFAULT_MAX_HTTP_RESPONSE_BYTES,
     max_concurrent_runs: int = 8,
+    warm_sandbox_pool_size: int = 0,
     max_resumable_streams: int | None = None,
     stream_session_ttl_seconds: float = 600.0,
     stream_journal_path: str | Path | None = None,
@@ -1133,7 +1136,9 @@ def create_app(
     their respective routes; both default to no additional scope requirement. Supply either
     ``stream_journal_path`` for Gabby's owned same-host SQLite journal or ``stream_journal`` for
     a host-owned backend implementing :class:`StreamJournal`. Gabby manages the SQLite journal's
-    lifecycle; injected journal lifecycle remains with the host.
+    lifecycle; injected journal lifecycle remains with the host. ``warm_sandbox_pool_size`` can
+    prestart single-use Linux containers for a workspace-free sandbox profile; the pool is owned by
+    this app's lifespan and each worker process has its own pool.
     """
     if (
         isinstance(max_request_bytes, bool)
@@ -1151,6 +1156,12 @@ def create_app(
         or max_concurrent_runs < 1
     ):
         raise ValueError("max_concurrent_runs must be a positive integer")
+    if (
+        isinstance(warm_sandbox_pool_size, bool)
+        or not isinstance(warm_sandbox_pool_size, int)
+        or not 0 <= warm_sandbox_pool_size <= 64
+    ):
+        raise ValueError("warm_sandbox_pool_size must be an integer from 0 through 64")
     if max_resumable_streams is None:
         max_resumable_streams = max_concurrent_runs * 4
     if (
@@ -1199,6 +1210,17 @@ def create_app(
         max_response_bytes=max_response_bytes,
         journal=selected_stream_journal,
     )
+    original_sandbox_adapter = agent.sandbox_adapter
+    warm_sandbox_pool = None
+    if warm_sandbox_pool_size:
+        if agent.definition.sandbox is None:
+            raise ValueError("warm_sandbox_pool_size requires sandbox configuration")
+        warm_sandbox_pool = WarmSandboxPool(
+            agent.definition.sandbox,
+            size=warm_sandbox_pool_size,
+            adapter=original_sandbox_adapter,
+        )
+        agent.sandbox_adapter = warm_sandbox_pool
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -1210,6 +1232,8 @@ def create_app(
 
         reaper: asyncio.Task[None] | None = None
         try:
+            if warm_sandbox_pool is not None:
+                await warm_sandbox_pool.start()
             if owned_stream_journal is not None:
                 await owned_stream_journal.initialize()
             reaper = asyncio.create_task(reap_sessions())
@@ -1222,8 +1246,13 @@ def create_app(
                 await stream_sessions.aclose()
                 await agent.aclose()
             finally:
-                if owned_stream_journal is not None:
-                    owned_stream_journal.close()
+                try:
+                    if warm_sandbox_pool is not None:
+                        await warm_sandbox_pool.aclose()
+                finally:
+                    agent.sandbox_adapter = original_sandbox_adapter
+                    if owned_stream_journal is not None:
+                        owned_stream_journal.close()
 
     app = FastAPI(title="Gabby Agent API", version="1.0.0", lifespan=lifespan)
     run_capacity = _RunCapacity(max_concurrent_runs)
@@ -1745,6 +1774,7 @@ def serve(
     authenticator_timeout_seconds: float = DEFAULT_AUTHENTICATOR_TIMEOUT_SECONDS,
     max_response_bytes: int = DEFAULT_MAX_HTTP_RESPONSE_BYTES,
     max_concurrent_runs: int = 8,
+    warm_sandbox_pool_size: int = 0,
     max_resumable_streams: int | None = None,
     stream_session_ttl_seconds: float = 600.0,
     stream_journal_path: str | Path | None = None,
@@ -1775,6 +1805,7 @@ def serve(
         authenticator_timeout_seconds=authenticator_timeout_seconds,
         max_response_bytes=max_response_bytes,
         max_concurrent_runs=max_concurrent_runs,
+        warm_sandbox_pool_size=warm_sandbox_pool_size,
         max_resumable_streams=max_resumable_streams,
         stream_session_ttl_seconds=stream_session_ttl_seconds,
         stream_journal_path=stream_journal_path,

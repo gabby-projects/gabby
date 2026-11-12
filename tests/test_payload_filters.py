@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Provider-boundary request and response filtering contracts."""
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from gabby.agent import Agent
 from gabby.config import AgentDefinition
 from gabby.filtered_provider import FilteredModelProvider
 from gabby.models import ModelResponse, ModelResponseSizeError, ModelStreamDelta
-from gabby.payload_filters import PayloadFilterError
+from gabby.payload_filters import DefaultPayloadFilter, PayloadFilterError
 
 
 class FilterTestModel:
@@ -186,3 +187,50 @@ async def test_custom_stream_filter_buffers_only_within_response_limit() -> None
             max_response_bytes=32,
         ):
             pytest.fail("a partial response escaped the buffered filter")
+
+
+def test_default_filter_redacts_json_values_without_breaking_json() -> None:
+    source = '{"email":"person@example.com","summary":"Public update"}'
+    filtered = DefaultPayloadFilter().filter_response(
+        response=ModelResponse(content=source), purpose="test"
+    )
+
+    assert filtered.content is not None
+    assert __import__("json").loads(filtered.content) == {
+        "email": "[REDACTED_EMAIL]",
+        "summary": "Public update",
+    }
+
+
+@pytest.mark.asyncio
+async def test_subclassed_default_filter_inspects_complete_buffered_stream() -> None:
+    class ObservingDefaultFilter(DefaultPayloadFilter):
+        def __init__(self) -> None:
+            self.seen: list[str | None] = []
+
+        def filter_response(self, *, response: ModelResponse, purpose: str) -> ModelResponse:
+            self.seen.append(response.content)
+            return response
+
+    class ChunkedModel(FilterTestModel):
+        async def stream(self, **kwargs: Any) -> Any:
+            self.calls.append(kwargs)
+            yield ModelStreamDelta(content_delta="first ")
+            yield ModelStreamDelta(content_delta="second")
+            yield ModelStreamDelta(finish_reason="stop", usage={"input_tokens": 2})
+            yield ModelStreamDelta(usage={"output_tokens": 3})
+
+    custom_filter = ObservingDefaultFilter()
+    provider = FilteredModelProvider(ChunkedModel("unused"), [custom_filter], purpose="test")
+    deltas = [
+        delta
+        async for delta in provider.stream(
+            messages=[{"role": "user", "content": "hello"}],
+            tools=[],
+            model="filter-test",
+        )
+    ]
+
+    assert custom_filter.seen == ["first second"]
+    assert "".join(delta.content_delta or "" for delta in deltas) == "first second"
+    assert deltas[-1].usage == {"input_tokens": 2, "output_tokens": 3}

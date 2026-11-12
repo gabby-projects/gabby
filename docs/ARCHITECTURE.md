@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Gabby Agent Runtime and Governance Framework
 
 **Status:** living architecture document for the pre-1.0 implementation. Accepted decisions and known limitations are recorded in the ADRs, roadmap, and [project scorecard](PROJECT_SCORECARD.md). Public extension contracts may change before v1.0; see [the extension API policy](EXTENSIONS.md).
@@ -34,7 +50,7 @@ hosted organizational control plane: Gabby does not centrally manage teams, iden
 across deployed applications. The host remains responsible for deciding who may call a deployment
 and how separate users or tenants are isolated.
 
-Runtime composition gives an agent its requested character through user-defined instructions and governed execution. Gabby does not train models, modify model weights, or load model adapters. Its AI enforcer applies the configured character within policies, available tools, knowledge, and execution pipelines.
+Runtime composition places user-defined character instructions in the model context and applies runtime policies to tool access and execution. Instructions guide the generated response but do not guarantee its tone or content. Gabby does not train models, modify model weights, or load model adapters.
 
 Gabby's behavior is configured through runtime, global, agent, skill, and task instructions;
 retrieved material can provide user-scoped reference context, while policy and capability checks
@@ -236,7 +252,7 @@ Sandboxed runs add a best-effort final `sandbox_resource_usage` trace event when
 
 Provider interface: complete/stream with structured messages, tool calls, usage, cancellation, and timeout. Built-in OpenAI-compatible, Ollama, Hugging Face, Anthropic, and Gemini adapters require HTTPS for remote endpoints and permit HTTP only on loopback; custom providers own their transport security. Anthropic uses the native Messages API, translates system and tool-result messages, and normalizes streamed text and tool-input events. Gemini uses GenerateContent REST, translates function calling, and round-trips provider IDs and thought signatures needed by stateless multi-step calls. Mock transport tests cover provider contracts; live compatibility with Ollama, hosted providers, and individual model/provider combinations remains unverified. Tool interface: validated arguments, structured result/error, cancellation, and execution limits. Host-trusted handlers can opt into request-scoped `ToolContext`, with a construction-validated allowlist of environment resources and a cooperative cancellation token, both excluded from model arguments; see [ADR 0030](architecture/adr/0030-scoped-tool-context.md) and [ADR 0037](architecture/adr/0037-cooperative-tool-cancellation.md). Tools marked `requires_approval=True` pause at an injectable host-owned async approval handler; without a handler they are denied. The consumer owns approval UX and persistence. Approval runs within the execution deadline and emits stream and trace events. Verifiers implement the typed `Verifier` protocol and return `VerificationResult` values, which are validated and recorded in response metadata and traces; see [ADR 0010](architecture/adr/0010-typed-verifier-contract.md). An optional injected `Planner` can return a bounded structured plan that is passed as advisory context; the existing reactive tool loop remains the default and enforces all policies. `Agent` also accepts an optional async `Tracer` that receives ordered event snapshots; the existing run trace remains in the result, and exporter failures are bounded and fail-open. The host owns telemetry credentials, transport, retention, and deletion. See [ADR 0023](architecture/adr/0023-injectable-event-tracer.md). Other replaceable interfaces: environment, skill resolver/selector, tool registry, retriever, reranker, policy engine, sandbox, and storage.
 
-Gabby does not train models, modify model weights, or load model adapters. Its AI enforcer applies user-defined character instructions within runtime policies and execution pipelines. The former adapter-loading decision is recorded as superseded in the [ADR index](architecture/adr/README.md).
+Gabby does not train models, modify model weights, or load model adapters. Character instructions guide the model response; runtime policies enforce tool access and execution boundaries. The former adapter-loading decision is recorded as superseded in the [ADR index](architecture/adr/README.md).
 
 Use explicit capability checks and stable error types. The `/v1` OpenAPI contract has typed run request, result, trace-event, and execution-error schemas. Authentication errors still use FastAPI's standard HTTP error envelope. Avoid passing arbitrary dictionaries between core modules when a public type can make the contract clear. Public extension compatibility follows the pre-1.0 policy in [ADR 0009](architecture/adr/0009-pre-1-0-extension-api-policy.md) and [the extension guide](EXTENSIONS.md).
 

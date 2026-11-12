@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Changelog
 
 User-visible changes are recorded here. Before the first release, entries are grouped under
@@ -12,9 +28,12 @@ User-visible changes are recorded here. Before the first release, entries are gr
   inject parsers for other formats; removed bundled structured-file, office, PDF, and OCR parsers.
 - Retained bounded synchronous tool-pool capacity errors and opt-in live completion and streaming
   acceptance for hosted model providers.
-- Removed the built-in PostgreSQL stores and journals, MCP adapters, and OpenTelemetry exporter.
-  SQLite remains the built-in persistence option; hosts may implement Gabby's storage and tracing
-  interfaces for their own infrastructure.
+- Removed the built-in PostgreSQL stores and journals. SQLite remains the built-in persistence
+  option; hosts may implement Gabby's storage interfaces for their own infrastructure.
+- Added optional MCP client/server support, OpenTelemetry spans, signed audit records, LF TRACE
+  evidence, and lightweight LangGraph, CrewAI, and n8n HTTP integration helpers.
+- Added starter skill bundle sources, an optional prewarmed container pool, and TypeScript, Go, and
+  Rust HTTP/SSE client SDK sources. These remain unreleased until reviewed, tested, and published.
 
 ## 0.1.0a1 — 2026-10-10
 

@@ -1,3 +1,19 @@
+<!--
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Copyright 2026-present Gabby Contributors.
+-->
+
 # Gabby
 
 <div align="center">
@@ -23,7 +39,7 @@ Gabby helps developers define what an AI agent can do, govern how it uses tools,
 
 Gabby is for developers who need a consistent way to configure agent capabilities, govern tool access, and execute agent work. A host application supplies a request and any context or memory it wants the agent to use. Gabby validates the agent definition, applies its configured runtime contracts, executes model and tool calls within the configured bounds, and returns the output and optional trace. Execution state is temporary; persistence remains with the host by default.
 
-To give an agent a character the user wants, the user defines its instructions and Gabby's AI enforcer applies them within runtime policies and tool boundaries. A host can use a user-scoped RAG pipeline to supply relevant preferences and reference material to each request. Gabby does not train models, modify model weights, or load model adapters.
+To give an agent a requested character, the host defines its instructions and may supply user-scoped preferences or reference material. Gabby places that guidance in the model context while runtime policies enforce tool access and execution limits; the model still generates the response, so guidance alone cannot guarantee its tone or content. Gabby does not train models, modify model weights, or load model adapters.
 
 Gabby is complementary to agent orchestration frameworks such as LangChain, CrewAI, and IBM BeeAI. Those frameworks help developers compose agents and workflows; Gabby focuses on the runtime boundary for a configured agent: enforcing tool permissions and policies, applying approvals and verification, bounding execution, and returning traceable results. Gabby does not aim to replace an application's orchestration layer. It can serve as the governed execution runtime for an agent or workflow selected and coordinated by the host application.
 
@@ -60,8 +76,14 @@ An agent definition composes a model, environment, skills, tools, knowledge sour
 | Tools and policies | Schema-validated tools, explicit permissions, JWT scope-based RBAC, approval hooks, bounded results, runtime policy enforcement |
 | Isolation | Optional per-run Docker or Podman sandboxing for supported shell/filesystem tools; configuration and host determine the effective boundary |
 | Knowledge | Bounded plain-text and Markdown ingestion, SQLite FTS5 and vector stores, hybrid retrieval contracts, pluggable embeddings and reranking |
-| Interfaces | Python API and FastAPI `/v1` run and SSE endpoints |
+| Interfaces | Python API, FastAPI `/v1` run and SSE endpoints, generated TypeScript/Node.js, Go, and Rust clients |
 | Observability | Structured execution traces and injectable event tracing |
+
+Review the [starter bundle pack](bundles/README.md) for source-reviewed support, SQL analyst, and
+sandboxed Git examples. Signed release artifacts require a maintainer-provisioned signing key.
+Optional prewarmed single-use containers are described in the
+[scaling guide](docs/SCALING_AND_OPERATIONS.md#prewarmed-sandbox-pools). Lightweight TypeScript,
+Go, and Rust HTTP/SSE clients are available under [sdks/](sdks/README.md).
 
 Gabby’s controls are not all enabled by default. Skill signing is optional, sandboxing requires explicit configuration, and host-provided tool handlers are trusted code unless a sandboxed implementation is supplied. Engine, operating-system, provider, and deployment behavior must be verified for the target environment. See the [threat model](docs/THREAT_MODEL.md), [scaling and operational tradeoffs](docs/SCALING_AND_OPERATIONS.md), and [current limitations](docs/PROJECT_SCORECARD.md).
 

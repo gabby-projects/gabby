@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Developer CLI for validating, inspecting, running, and serving agents."""
 
 from __future__ import annotations
@@ -50,7 +51,7 @@ from .embeddings import (
 )
 from .evaluation import evaluate_agent, load_evaluation_dataset
 from .ingestion import FileIngestor
-from .knowledge import MAX_RETRIEVAL_DOCUMENTS, InMemoryBM25Retriever, SQLiteFTS5Store
+from .knowledge import MAX_RETRIEVAL_DOCUMENTS, InMemoryBM25Retriever, Retriever, SQLiteFTS5Store
 from .retrieval_evaluation import evaluate_retriever, load_retrieval_evaluation_dataset
 from .server import (
     DEFAULT_MAX_HTTP_REQUEST_BYTES,
@@ -67,7 +68,7 @@ from .skill_packages import (
 )
 from .skill_registry import SkillRegistryClient, build_static_skill_registry
 from .skill_signing import sign_skill_package, verify_skill_package_signature
-from .skill_trust import load_skill_trust_keys
+from .skill_trust import SkillTrustPolicy, load_skill_trust_keys
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -111,6 +112,7 @@ def _parser() -> argparse.ArgumentParser:
             type=Path,
             help="Optional SQLite knowledge database used to validate the agent's store connection",
         )
+        _add_trusted_key_source_options(command)
     knowledge = commands.add_parser(
         "knowledge", help="Ingest, delete, search, or evaluate a local knowledge store"
     )
@@ -282,6 +284,7 @@ def _parser() -> argparse.ArgumentParser:
         default=Path("./.gabby/knowledge.db"),
         help="SQLite knowledge database (default: ./.gabby/knowledge.db)",
     )
+    _add_trusted_key_source_options(run)
     evaluation = commands.add_parser("evaluate", help="Run a bounded JSONL agent regression suite")
     evaluation.add_argument("agent", type=Path)
     evaluation.add_argument("--dataset", required=True, type=Path, help="JSON Lines case dataset")
@@ -291,6 +294,7 @@ def _parser() -> argparse.ArgumentParser:
         default=Path("./.gabby/knowledge.db"),
         help="SQLite knowledge database (default: ./.gabby/knowledge.db)",
     )
+    _add_trusted_key_source_options(evaluation)
     embeddings = commands.add_parser("embeddings", help="Evaluate and inspect embedding providers")
     embedding_actions = embeddings.add_subparsers(dest="embedding_action", required=True)
     embedding_evaluate = embedding_actions.add_parser(
@@ -321,6 +325,15 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         default=8,
         help="Maximum simultaneous run and stream requests in this process (default: 8)",
+    )
+    serve_command.add_argument(
+        "--warm-sandbox-pool-size",
+        type=int,
+        default=0,
+        help=(
+            "Prestart this many single-use Linux containers for a host-mount-free sandbox "
+            "profile (default: disabled)"
+        ),
     )
     serve_command.add_argument(
         "--max-resumable-streams",
@@ -386,6 +399,7 @@ def _parser() -> argparse.ArgumentParser:
         default=[],
         help="Require this capability on the stream route; repeat to require multiple scopes",
     )
+    _add_trusted_key_source_options(serve_command)
     return parser
 
 
@@ -601,11 +615,11 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_run_evaluation_command(definition, args))
         if args.command == "validate":
             # Constructing resolves skills and provider configuration without a model call.
-            with _cli_agent(definition, args.knowledge_db, require_database=False):
+            with _cli_agent_from_args(definition, args, require_database=False):
                 pass
             print(f"Agent '{definition.name}' is valid")
         elif args.command == "inspect":
-            with _cli_agent(definition, args.knowledge_db, require_database=False) as agent:
+            with _cli_agent_from_args(definition, args, require_database=False) as agent:
                 print(
                     json.dumps(
                         {
@@ -642,7 +656,7 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 )
         elif args.command == "skills":
-            with _cli_agent(definition, args.knowledge_db, require_database=False) as agent:
+            with _cli_agent_from_args(definition, args, require_database=False) as agent:
                 for skill in agent.skills:
                     print(f"{skill.name}@{skill.version}\t{skill.description}")
         elif args.command == "run":
@@ -653,7 +667,7 @@ def main(argv: list[str] | None = None) -> int:
             context = json.loads(args.context) if args.context else {}
             if not isinstance(context, dict):
                 raise ConfigError("--context must decode to a JSON object")
-            with _cli_agent(definition, args.knowledge_db, require_database=True) as agent:
+            with _cli_agent_from_args(definition, args, require_database=True) as agent:
                 result = agent.run(args.input, context=context)
                 print(result.output)
                 print(f"\ntrace_id: {result.trace.trace_id}", file=sys.stderr)
@@ -664,6 +678,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise ConfigError("--bearer-token-env must be a valid environment variable name")
             if args.max_concurrent_runs < 1:
                 raise ConfigError("--max-concurrent-runs must be a positive integer")
+            if not 0 <= args.warm_sandbox_pool_size <= 64:
+                raise ConfigError("--warm-sandbox-pool-size must be from 0 through 64")
             if args.max_resumable_streams is not None and args.max_resumable_streams < 1:
                 raise ConfigError("--max-resumable-streams must be a positive integer")
             if not math.isfinite(args.stream_session_ttl) or args.stream_session_ttl <= 0:
@@ -675,13 +691,14 @@ def main(argv: list[str] | None = None) -> int:
             if args.max_response_bytes < 256:
                 raise ConfigError("--max-response-bytes must be at least 256")
             serve(
-                _cli_agent(definition, args.knowledge_db, require_database=True),
+                _cli_agent_from_args(definition, args, require_database=True),
                 host=args.host,
                 port=args.port,
                 max_request_bytes=args.max_request_bytes,
                 request_body_timeout_seconds=args.request_body_timeout,
                 max_response_bytes=args.max_response_bytes,
                 max_concurrent_runs=args.max_concurrent_runs,
+                warm_sandbox_pool_size=args.warm_sandbox_pool_size,
                 max_resumable_streams=args.max_resumable_streams,
                 stream_session_ttl_seconds=args.stream_session_ttl,
                 stream_journal_path=args.stream_journal_db,
@@ -999,7 +1016,7 @@ async def _run_knowledge_command(args: argparse.Namespace) -> int:
 async def _run_evaluation_command(definition: AgentDefinition, args: argparse.Namespace) -> int:
     """Run a JSONL suite against one constructed agent and emit a machine-readable report."""
     cases = load_evaluation_dataset(args.dataset)
-    async with _cli_agent(definition, args.knowledge_db, require_database=True) as agent:
+    async with _cli_agent_from_args(definition, args, require_database=True) as agent:
         report = await evaluate_agent(agent, cases)
     print(
         json.dumps(
@@ -1195,18 +1212,52 @@ def _resolve_trusted_skill_keys(
     return trusted
 
 
+def _cli_agent_from_args(
+    definition: AgentDefinition, args: argparse.Namespace, *, require_database: bool
+) -> Agent:
+    """Construct an agent using only explicitly supplied CLI trust sources."""
+    return _cli_agent(
+        definition,
+        getattr(args, "knowledge_db", None),
+        require_database=require_database,
+        trusted_key_entries=getattr(args, "trusted_key", []),
+        trusted_key_dir=getattr(args, "trusted_key_dir", None),
+    )
+
+
 def _cli_agent(
-    definition: AgentDefinition, knowledge_db: Path | None, *, require_database: bool
+    definition: AgentDefinition,
+    knowledge_db: Path | None,
+    *,
+    require_database: bool,
+    trusted_key_entries: list[str] | None = None,
+    trusted_key_dir: Path | None = None,
 ) -> Agent:
     """Construct a CLI agent with persistent local retrieval when its definition uses knowledge."""
+    trusted_keys = _resolve_trusted_skill_keys(
+        trusted_key_entries or [], trusted_key_dir, required=False
+    )
+    trust_policy = SkillTrustPolicy(trusted_keys) if trusted_keys else None
     knowledge = getattr(definition, "knowledge", {})
     if not knowledge:
+        if trust_policy is not None:
+            return Agent(definition, skill_trust_policy=trust_policy)
         return Agent(definition)
     if knowledge_db is None:
         if require_database:
             knowledge_db = Path("./.gabby/knowledge.db")
         else:
-            return Agent(definition, retriever=InMemoryBM25Retriever([]))
+            empty_retriever: Retriever = InMemoryBM25Retriever([])
+            if trust_policy is not None:
+                return Agent(
+                    definition,
+                    retriever=empty_retriever,
+                    skill_trust_policy=trust_policy,
+                )
+            return Agent(
+                definition,
+                retriever=empty_retriever,
+            )
 
     resolved_database = knowledge_db.expanduser()
     try:
@@ -1218,7 +1269,10 @@ def _cli_agent(
             f"Knowledge database {resolved_database} does not exist; populate it with "
             "`gabby knowledge ingest ROOT --database PATH`"
         )
-    return Agent(definition, retriever=SQLiteFTS5Store(resolved_database))
+    database_retriever: Retriever = SQLiteFTS5Store(resolved_database)
+    if trust_policy is not None:
+        return Agent(definition, retriever=database_retriever, skill_trust_policy=trust_policy)
+    return Agent(definition, retriever=database_retriever)
 
 
 async def _run_skill_registry_command(args: argparse.Namespace, *, headers: dict[str, str]) -> None:

@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Thin HTTP client adapters for orchestration frameworks."""
 
 from __future__ import annotations
@@ -61,10 +62,10 @@ def crewai_tool(
 
     sync_client = client.clone()
     async_client = client.clone()
+    selected_name = name
+    selected_description = description
 
     class GabbyCrewTool(BaseTool):  # type: ignore[misc]
-        name: str = name
-        description: str = description
         args_schema: type[BaseModel] = TaskInput
 
         def _run(self, task: str) -> str:
@@ -73,7 +74,18 @@ def crewai_tool(
         async def _arun(self, task: str) -> str:
             return (await async_client.arun(task)).output
 
-    return GabbyCrewTool()
+        def close(self) -> None:
+            """Close the synchronous client when the owning CrewAI process stops."""
+            sync_client.close()
+
+        async def aclose(self) -> None:
+            """Close both owned HTTP clients after asynchronous CrewAI use."""
+            try:
+                await async_client.aclose()
+            finally:
+                sync_client.close()
+
+    return GabbyCrewTool(name=selected_name, description=selected_description)
 
 
 def n8n_request(

@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Contract tests for the optional content-minimizing SQLite approval audit."""
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import hashlib
 import json
 import sqlite3
 import threading
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -63,7 +65,7 @@ async def test_audit_omits_raw_arguments_and_principal_by_default(tmp_path: Path
     assert record.arguments_sha256 == hashlib.sha256(canonical).hexdigest()
     assert record.approved is True
     assert record.principal_subject is None
-    with sqlite3.connect(tmp_path / "audit.sqlite3") as connection:
+    with closing(sqlite3.connect(tmp_path / "audit.sqlite3")) as connection, connection:
         table_data = connection.execute("SELECT * FROM gabby_tool_approval_audit").fetchone()
     assert b"private@example.test" not in repr(table_data).encode()
 

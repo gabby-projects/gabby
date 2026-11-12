@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,12 +9,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Model-provider decorator that filters complete and streaming payloads."""
 
 from __future__ import annotations
 
 import inspect
-import json
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
@@ -26,9 +26,11 @@ from .models import (
     ModelResponse,
     ModelResponseSizeError,
     ModelStreamDelta,
+    _count_utf8_payload,
     ensure_model_request_size,
+    ensure_model_response_size,
 )
-from .payload_filters import DefaultPayloadFilter, PayloadFilter
+from .payload_filters import PayloadFilter
 
 
 async def _apply_filters_request(
@@ -129,9 +131,18 @@ class FilteredModelProvider:
         response = await method(**kwargs)
         if not isinstance(response, ModelResponse):
             raise TypeError("model provider returned an invalid response object")
-        return await _apply_filters_response(
+        filtered_response = await _apply_filters_response(
             self._filters, response=response, purpose=self._purpose
         )
+        ensure_model_response_size(
+            filtered_response,
+            max_bytes=(
+                max_response_bytes
+                if max_response_bytes is not None
+                else DEFAULT_MAX_MODEL_RESPONSE_BYTES
+            ),
+        )
+        return filtered_response
 
     async def stream(
         self,
@@ -189,60 +200,21 @@ class FilteredModelProvider:
         }
         if max_response_bytes is not None and _accepts_keyword(method, "max_response_bytes"):
             kwargs["max_response_bytes"] = max_response_bytes
-        if all(
-            isinstance(payload_filter, DefaultPayloadFilter) for payload_filter in self._filters
-        ):
-            # The default heuristic filter is safe to apply to each delta and preserves live SSE.
-            # Host filters can inspect the complete response and therefore use the buffered path.
-            async for delta in method(**kwargs):
-                if not isinstance(delta, ModelStreamDelta):
-                    raise TypeError("model provider returned a malformed stream delta")
-                if delta.content_delta is not None:
-                    filtered = await _apply_filters_response(
-                        self._filters,
-                        response=ModelResponse(content=delta.content_delta),
-                        purpose=self._purpose,
-                    )
-                    delta = ModelStreamDelta(
-                        content_delta=filtered.content or "",
-                        tool_call_index=delta.tool_call_index,
-                        tool_call_id=delta.tool_call_id,
-                        tool_name_delta=delta.tool_name_delta,
-                        tool_arguments_delta=delta.tool_arguments_delta,
-                        finish_reason=delta.finish_reason,
-                        usage=delta.usage,
-                        provider_metadata=delta.provider_metadata,
-                    )
-                yield delta
-            return
-
+        response_limit = (
+            max_response_bytes
+            if max_response_bytes is not None
+            else DEFAULT_MAX_MODEL_RESPONSE_BYTES
+        )
         deltas: list[ModelStreamDelta] = []
-        response_limit = max_response_bytes or DEFAULT_MAX_MODEL_RESPONSE_BYTES
         used_bytes = 0
         async for delta in method(**kwargs):
             if not isinstance(delta, ModelStreamDelta):
                 raise TypeError("model provider returned a malformed stream delta")
-            delta_payload = {
-                "content_delta": delta.content_delta,
-                "tool_call_index": delta.tool_call_index,
-                "tool_call_id": delta.tool_call_id,
-                "tool_name_delta": delta.tool_name_delta,
-                "tool_arguments_delta": delta.tool_arguments_delta,
-                "finish_reason": delta.finish_reason,
-                "usage": delta.usage,
-                "provider_metadata": delta.provider_metadata,
-            }
             try:
-                used_bytes += len(
-                    json.dumps(
-                        delta_payload,
-                        ensure_ascii=False,
-                        allow_nan=False,
-                        separators=(",", ":"),
-                    ).encode("utf-8")
-                )
+                delta_bytes = _stream_delta_bytes(delta, response_limit)
             except (TypeError, ValueError, UnicodeError):
                 raise TypeError("model provider returned malformed stream metadata") from None
+            used_bytes += delta_bytes
             if used_bytes > response_limit:
                 raise ModelResponseSizeError(
                     f"Model response exceeded max_model_response_bytes={response_limit}"
@@ -251,6 +223,7 @@ class FilteredModelProvider:
         response = await _apply_filters_response(
             self._filters, response=_response_from_deltas(deltas), purpose=self._purpose
         )
+        ensure_model_response_size(response, max_bytes=response_limit)
         if response.content:
             yield ModelStreamDelta(content_delta=response.content)
         for index, tool_call in enumerate(response.tool_calls):
@@ -265,7 +238,7 @@ class FilteredModelProvider:
         last = deltas[-1] if deltas else None
         yield ModelStreamDelta(
             finish_reason=(last.finish_reason if last is not None else "stop"),
-            usage=(last.usage if last is not None else None),
+            usage=(response.usage if response.usage else None),
             provider_metadata=(last.provider_metadata if last is not None else None),
         )
 
@@ -314,6 +287,21 @@ def _accepts_keyword(method: Any, name: str) -> bool:
     return any(parameter.name == name for parameter in parameters)
 
 
+def _stream_delta_bytes(delta: ModelStreamDelta, max_bytes: int) -> int:
+    """Count response data, excluding repeated normalized-delta envelope overhead."""
+    return _count_utf8_payload(
+        (
+            delta.content_delta,
+            delta.tool_call_id,
+            delta.tool_name_delta,
+            delta.tool_arguments_delta,
+            delta.usage,
+            delta.provider_metadata,
+        ),
+        max_bytes=max_bytes,
+    )
+
+
 def _response_from_deltas(deltas: list[ModelStreamDelta]) -> ModelResponse:
     content: list[str] = []
     calls: dict[int, dict[str, Any]] = {}
@@ -338,7 +326,7 @@ def _response_from_deltas(deltas: list[ModelStreamDelta]) -> ModelResponse:
         if delta.finish_reason is not None:
             finish_reason = delta.finish_reason
         if delta.usage is not None:
-            usage = delta.usage
+            usage.update(delta.usage)
     return ModelResponse(
         content="".join(content) or None,
         tool_calls=[calls[index] for index in sorted(calls)],

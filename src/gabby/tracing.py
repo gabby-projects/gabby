@@ -1,5 +1,3 @@
-# Copyright 2026-present Gabby Contributors.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,6 +9,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Copyright 2026-present Gabby Contributors.
+
 """Execution trace data structures."""
 
 from __future__ import annotations
@@ -18,16 +19,22 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import os
 import re
+import tempfile
+import threading
 import time
 import uuid
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, cast
+
+_TRACE_IO_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gabby-trace-io")
 
 _PARENT_TRACE_ID: ContextVar[str | None] = ContextVar("gabby_parent_trace_id", default=None)
 _CURRENT_TRACE_ID: ContextVar[str | None] = ContextVar("gabby_current_trace_id", default=None)
@@ -190,7 +197,8 @@ class SignedAuditExporter:
 
     The JSONL format is Gabby's audit format, not a claim of TRACE conformance. The key
     must be protected and chain heads should be anchored outside this process for resistance
-    to whole-file replacement.
+    to whole-file replacement. One exporter owns a path at a time; close it after the host
+    stops exporting so another worker can acquire the path lock.
     """
 
     def __init__(self, path: str | Path, private_key: bytes) -> None:
@@ -203,13 +211,40 @@ class SignedAuditExporter:
         if not isinstance(private_key, bytes) or len(private_key) != 32:
             raise ValueError("private_key must be a 32-byte Ed25519 private key")
         self._key = Ed25519PrivateKey.from_private_bytes(private_key)
-        self._path = Path(path)
+        self._path = Path(path).expanduser().resolve()
         self._previous_hash = "0" * 64
-        if self._path.exists():
-            self._previous_hash = self._last_hash()
+        self._write_lock = threading.Lock()
+        self._pid = os.getpid()
+        self._closed = False
+        self._lock_path = self._path.with_name(self._path.name + ".lock")
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_fd = self._acquire_file_lock()
+        try:
+            if self._path.exists() and self._path.stat().st_size:
+                self._previous_hash = self._last_hash()
+        except BaseException:
+            self.close()
+            raise
 
     async def on_event(self, *, trace_id: str, agent_name: str, event: TraceEvent) -> None:
         """Append an integrity-protected record; omit prompts, arguments, and model output."""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            _TRACE_IO_EXECUTOR, self._append_event, trace_id, agent_name, event
+        )
+
+    def _append_event(self, trace_id: str, agent_name: str, event: TraceEvent) -> None:
+        """Serialize signing and synchronous filesystem operations off the event loop."""
+        if os.getpid() != self._pid:
+            raise RuntimeError("Construct SignedAuditExporter after starting worker processes")
+        if not isinstance(trace_id, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", trace_id) is None:
+            raise ValueError("trace_id must contain only letters, digits, underscores, or hyphens")
+        with self._write_lock:
+            if self._closed:
+                raise RuntimeError("SignedAuditExporter is closed")
+            self._append_record(trace_id, agent_name, event)
+
+    def _append_record(self, trace_id: str, agent_name: str, event: TraceEvent) -> None:
         proof: dict[str, Any] = {
             "trace_id": trace_id,
             "agent": agent_name[:128],
@@ -225,7 +260,7 @@ class SignedAuditExporter:
         elif event.kind == "tool_error":
             proof["tool"] = safe_tool_name
             denied = event.details.get("error_code") == "policy_denied"
-            proof["policy_decision"] = "denied" if denied else "allowed"
+            proof["policy_decision"] = "denied" if denied else "unknown"
             proof["tool_outcome"] = "failed"
         elif event.kind == "persona_verification":
             result = event.details.get("result")
@@ -256,6 +291,50 @@ class SignedAuditExporter:
             stream.flush()
             os.fsync(stream.fileno())
         self._previous_hash = digest
+
+    def _acquire_file_lock(self) -> int:
+        """Acquire a cross-process exclusive sidecar lock for this audit path."""
+        descriptor = os.open(self._lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            if os.fstat(descriptor).st_size == 0:
+                os.write(descriptor, b"\0")
+            if os.name == "nt":
+                import msvcrt
+
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                native_locking = cast(Any, msvcrt)
+                native_locking.locking(descriptor, native_locking.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (ImportError, OSError) as exc:
+            os.close(descriptor)
+            raise RuntimeError(
+                "Signed audit path already has an active writer or cannot be locked"
+            ) from exc
+        return descriptor
+
+    def close(self) -> None:
+        """Release the path lock after the host has stopped exporting events."""
+        with self._write_lock:
+            if self._closed:
+                return
+            self._closed = True
+            descriptor = self._lock_fd
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    native_locking = cast(Any, msvcrt)
+                    native_locking.locking(descriptor, native_locking.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            finally:
+                os.close(descriptor)
 
     def _last_hash(self) -> str:
         last: dict[str, Any] | None = None
@@ -305,6 +384,9 @@ class LFTraceExporter:
         claims: Mapping[str, Any],
         private_key: Any,
         audit_exporter: SignedAuditExporter | None = None,
+        max_pending_traces: int = 256,
+        max_tool_entries_per_trace: int = 4096,
+        pending_trace_ttl_seconds: float = 3600.0,
     ) -> None:
         if not isinstance(claims, Mapping) or self._RESERVED.intersection(claims):
             raise ValueError("claims must be a mapping without TRACE-generated fields")
@@ -312,43 +394,113 @@ class LFTraceExporter:
         self._claims = deepcopy(dict(claims))
         self._private_key = private_key
         self._audit_exporter = audit_exporter
-        self._tool_entries: dict[str, list[dict[str, str]]] = {}
+        if (
+            isinstance(max_pending_traces, bool)
+            or not isinstance(max_pending_traces, int)
+            or not 1 <= max_pending_traces <= 4096
+        ):
+            raise ValueError("max_pending_traces must be from 1 through 4096")
+        if (
+            isinstance(max_tool_entries_per_trace, bool)
+            or not isinstance(max_tool_entries_per_trace, int)
+            or not 1 <= max_tool_entries_per_trace <= 65536
+        ):
+            raise ValueError("max_tool_entries_per_trace must be from 1 through 65536")
+        if (
+            isinstance(pending_trace_ttl_seconds, bool)
+            or not isinstance(pending_trace_ttl_seconds, (int, float))
+            or not math.isfinite(pending_trace_ttl_seconds)
+            or not 1 <= pending_trace_ttl_seconds <= 86400
+        ):
+            raise ValueError("pending_trace_ttl_seconds must be from 1 through 86400")
+        self._max_pending_traces = max_pending_traces
+        self._max_tool_entries_per_trace = max_tool_entries_per_trace
+        self._pending_trace_ttl_seconds = float(pending_trace_ttl_seconds)
+        self._tool_entries: dict[str, tuple[float, list[dict[str, str]], bool]] = {}
+        self._dropped_traces: set[str] = set()
+        self._reject_untracked_traces = False
+        self.dropped_trace_count = 0
 
     async def on_event(self, *, trace_id: str, agent_name: str, event: TraceEvent) -> None:
         """Accumulate tool decisions and sign a Trust Record at successful run completion."""
+        if not isinstance(trace_id, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", trace_id) is None:
+            raise ValueError("trace_id must contain only letters, digits, underscores, or hyphens")
         if self._audit_exporter is not None:
             await self._audit_exporter.on_event(
                 trace_id=trace_id, agent_name=agent_name, event=event
             )
-        safe_tool_name = _safe_tool_name(event.details.get("name"))
-        if event.kind == "tool_call":
-            self._tool_entries.setdefault(trace_id, []).append(
-                {
-                    "tool_name": safe_tool_name,
-                    "decision": "allow",
-                }
-            )
-        elif event.kind == "tool_error":
-            self._tool_entries.setdefault(trace_id, []).append(
-                {
-                    "tool_name": safe_tool_name,
-                    "decision": (
-                        "deny" if event.details.get("error_code") == "policy_denied" else "allow"
-                    ),
-                }
-            )
-        elif event.kind == "run_completed":
-            await self._write_record(trace_id)
-        elif event.kind == "run_failed":
+        now = time.monotonic()
+        expired = [
+            pending_id
+            for pending_id, (updated_at, _, _) in self._tool_entries.items()
+            if now - updated_at > self._pending_trace_ttl_seconds
+        ]
+        for pending_id in expired:
+            self._tool_entries.pop(pending_id, None)
+            self._remember_dropped_trace(pending_id)
+            self.dropped_trace_count += 1
+        terminal = event.kind in {"run_failed", "run_cancelled", "run_timed_out", "run_completed"}
+        if trace_id in self._dropped_traces:
+            if terminal:
+                self._dropped_traces.discard(trace_id)
+            return
+        if self._reject_untracked_traces and trace_id not in self._tool_entries:
+            return
+        if event.kind in {"run_failed", "run_cancelled", "run_timed_out"}:
             self._tool_entries.pop(trace_id, None)
+            return
+        if event.kind == "run_completed":
+            state = self._tool_entries.pop(trace_id, None)
+            if state is None:
+                return
+            if state[2]:
+                self.dropped_trace_count += 1
+                return
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(_TRACE_IO_EXECUTOR, self._write_record, trace_id, state[1])
+            return
 
-    async def _write_record(self, trace_id: str) -> None:
+        state = self._tool_entries.get(trace_id)
+        if state is None:
+            if len(self._tool_entries) >= self._max_pending_traces:
+                self._remember_dropped_trace(trace_id)
+                self.dropped_trace_count += 1
+                return
+            state = (now, [], False)
+        _, entries, overflowed = state
+        if event.kind in {"tool_call", "tool_error"}:
+            if len(entries) >= self._max_tool_entries_per_trace:
+                overflowed = True
+            elif not overflowed:
+                tool_entry = {"tool_name": _safe_tool_name(event.details.get("name"))}
+                if event.kind == "tool_call":
+                    tool_entry["decision"] = "allow"
+                else:
+                    tool_entry["decision"] = (
+                        "deny" if event.details.get("error_code") == "policy_denied" else "unknown"
+                    )
+                entries.append(tool_entry)
+        self._tool_entries[trace_id] = (now, entries, overflowed)
+
+    def _remember_dropped_trace(self, trace_id: str) -> None:
+        """Retain bounded tombstones so an omitted run cannot later become a partial record."""
+        if trace_id in self._dropped_traces or self._reject_untracked_traces:
+            return
+        if len(self._dropped_traces) >= self._max_pending_traces:
+            # At extreme overload, fail closed for unknown traces rather than risk signing an
+            # incomplete transcript. This latch is intentionally process-lifetime state.
+            self._reject_untracked_traces = True
+            return
+        self._dropped_traces.add(trace_id)
+
+    def _write_record(self, trace_id: str, entries: list[dict[str, str]]) -> None:
         try:
             import rfc8785
             from agentrust_trace import sign_record
         except ImportError as exc:
             raise RuntimeError("LF TRACE export requires gabby-agent-runtime[trace]") from exc
-        entries = self._tool_entries.pop(trace_id, [])
+        if re.fullmatch(r"[A-Za-z0-9_-]{1,128}", trace_id) is None:
+            raise ValueError("trace_id must contain only letters, digits, underscores, or hyphens")
         transcript_hash = hashlib.sha256(rfc8785.dumps(entries)).hexdigest()
         record = {
             **deepcopy(self._claims),
@@ -364,10 +516,16 @@ class LFTraceExporter:
             raise TypeError("agentrust-trace sign_record() returned an invalid record")
         self._directory.mkdir(parents=True, exist_ok=True)
         destination = self._directory / f"{trace_id}.trace.json"
-        temporary = destination.with_suffix(".trace.json.tmp")
-        with temporary.open("w", encoding="utf-8") as stream:
-            json.dump(signed, stream, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            stream.write("\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        temporary.replace(destination)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{trace_id}.", suffix=".trace.json.tmp", dir=self._directory
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                json.dump(signed, stream, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                stream.write("\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
