@@ -34,6 +34,13 @@ User-visible changes are recorded here. Before the first release, entries are gr
   evidence, and lightweight LangGraph, CrewAI, and n8n HTTP integration helpers.
 - Added starter skill bundle sources, an optional prewarmed container pool, and TypeScript, Go, and
   Rust HTTP/SSE client SDK sources. These remain unreleased until reviewed, tested, and published.
+- Added a reference host-orchestrated multi-agent pipeline with separate Gabby service roles,
+  bounded handoffs, scope checks, tenant-scoped retrieval interfaces, and checkpoint recovery.
+- Prevented synthesis without specialist evidence and aligned streamed pipeline output with its
+  bounded saved result; added offline coverage for authorization, checkpoint reuse, cancellation,
+  and interrupted streams.
+- Propagated verified tenant IDs in signed pipeline worker tokens and bounded retrieval latency so
+  independent analyst work can continue when the tenant retriever stalls.
 
 ## 0.1.0a1 — 2026-10-10
 

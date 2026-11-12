@@ -31,12 +31,24 @@ import httpx
 from starlette.requests import Request
 
 
+def _is_tenant_id(value: object) -> bool:
+    """Return whether a tenant identifier is a bounded, unambiguous string."""
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and value == value.strip()
+        and len(value) <= 256
+        and all(ord(char) >= 32 and ord(char) != 127 for char in value)
+    )
+
+
 @dataclass(frozen=True)
 class Principal:
-    """Authenticated identity and optional OAuth-style scopes."""
+    """Authenticated identity, optional tenant, and OAuth-style scopes."""
 
     subject: str
     scopes: frozenset[str] = frozenset()
+    tenant_id: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.subject, str) or not self.subject.strip():
@@ -45,6 +57,8 @@ class Principal:
             not _is_scope_token(scope) for scope in self.scopes
         ):
             raise ValueError("principal scopes must be a frozenset of valid scope tokens")
+        if self.tenant_id is not None and not _is_tenant_id(self.tenant_id):
+            raise ValueError("principal tenant_id must be a bounded, non-empty string")
 
 
 def _is_scope_token(value: object) -> bool:
@@ -197,12 +211,13 @@ class BearerTokenAuthenticator:
 class JWTBearerAuthenticator:
     """Verify issuer-bound JWT bearer tokens from a configured JWKS endpoint.
 
-    This validates identity and standard ``scope`` or list-valued ``scp`` claims. Route
-    Authorization is opt-in through ``create_app`` scope requirements. The async
-    ``from_oidc_issuer`` factory supports fixed-issuer metadata discovery; token tenant routing is
-    not implemented. Optional scope mapping translates issuer scopes into Gabby capabilities and
-    drops unmapped scopes. A host-owned revocation checker can reject token IDs on every request.
-    The issuer and JWKS endpoint are fixed by the host, never read from a token.
+    This validates identity, an optional signed ``tenant_id`` claim, and standard ``scope`` or
+    list-valued ``scp`` claims. Route authorization is opt-in through ``create_app`` scope
+    requirements. The async ``from_oidc_issuer`` factory supports fixed-issuer metadata discovery.
+    The host remains responsible for deciding whether a route or tool requires a tenant. Optional
+    scope mapping translates issuer scopes into Gabby capabilities and drops unmapped scopes. A
+    host-owned revocation checker can reject token IDs on every request. The issuer and JWKS
+    endpoint are fixed by the host, never read from a token.
     Install the optional ``auth`` extra for cryptographic checks.
     """
 
@@ -530,6 +545,9 @@ class JWTBearerAuthenticator:
         subject = claims.get("sub")
         if not isinstance(subject, str) or not subject.strip():
             return None
+        tenant_id = claims.get("tenant_id")
+        if "tenant_id" in claims and not _is_tenant_id(tenant_id):
+            return None
         scopes = _jwt_scopes(claims)
         if scopes is None:
             return None
@@ -574,4 +592,4 @@ class JWTBearerAuthenticator:
                 for issuer_scope in scopes
                 for capability in self._scope_mapping.get(issuer_scope, frozenset())
             )
-        return Principal(subject, scopes)
+        return Principal(subject, scopes, tenant_id)

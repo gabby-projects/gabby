@@ -108,6 +108,18 @@ ID to the parent model, and the child trace records the parent trace ID for corr
 events remain independently exported. See the
 [extension contract reference](EXTENSION_CONTRACTS.md).
 
+### Host-orchestrated pipelines
+
+For deterministic multi-stage workflows, the host can call several separate single-agent Gabby
+services using the stateless HTTP client. The host owns routing, authenticated caller and tenant
+resolution, per-stage authorization, retrieval, durable checkpoints, retries, aggregate budgets,
+and final workflow state. Each service enforces its own route authentication, agent policy, tool
+allowlist, and per-run bounds. Typed `HostContext` may carry request-scoped preferences, session
+summaries, and tenant-filtered RAG snippets; it does not establish identity or tenant authorization.
+The reference uses bounded structured triage, host-side scope checks, parallel specialists, and
+final synthesis, but does not add a workflow engine or durable state to Gabby. See the
+[host pipeline guide](HOST_ORCHESTRATED_PIPELINES.md) and [ADR 0130](architecture/adr/0130-host-orchestrated-multi-agent-pipelines.md).
+
 ### Skill
 
 A portable package with a stable identifier and SemVer version, description, instructions/procedure,

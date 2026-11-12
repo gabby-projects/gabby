@@ -62,6 +62,16 @@ It shows the parent granting `agent:invoke`, delegating one explicit task, and c
 specialist's request trace to the parent run without forwarding parent context or memory. Both models
 are local deterministic examples; no network access or model credentials are needed.
 
+## Host-orchestrated multi-agent pipeline
+
+[`host_orchestrated_pipeline/`](host_orchestrated_pipeline/) contains a reference host coordinator
+and four per-agent YAML templates for triage, knowledge retrieval, read-only analysis, and
+synthesis. Unlike `agent_composition.py`, the host decides routing and parallel dispatch, supplies
+tenant-filtered context, and owns durable checkpoints. The reference requires host implementations
+of its token issuer, tenant retriever, checkpoint store, execution lease, and registered analyst
+tool; it is not a standalone demo. Read its README and the
+[host pipeline guide](../docs/HOST_ORCHESTRATED_PIPELINES.md) before adapting it to an application.
+
 To see a planner revise its plan after an order lookup, run:
 
 ```sh

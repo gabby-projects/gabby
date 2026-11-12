@@ -1204,11 +1204,14 @@ async def create_application():
 ```
 
 `JWTBearerAuthenticator` verifies signatures against its configured asymmetric algorithm allowlist,
-issuer, audience, expiration, and subject. `from_oidc_issuer` performs bounded, no-redirect metadata
-discovery once during async application startup and requires an exact issuer match and an HTTPS
-JWKS URL. Alternatively, pass `jwks_url` directly to the constructor. Both paths use bounded JWKS
-caching and do not follow redirects. The authenticator maps a standard space-delimited `scope` claim or list-valued `scp` claim onto the
-authenticated `Principal`. Set `scope_mapping` to translate identity-provider scopes to Gabby
+issuer, audience, expiration, and subject. If the signed token includes a `tenant_id` claim, the
+authenticator validates it and exposes it as `Principal.tenant_id`; it is optional, and the host must
+make tenant-aware tools reject requests where the claim is required but missing. `from_oidc_issuer`
+performs bounded, no-redirect metadata discovery once during async application startup and requires
+an exact issuer match and an HTTPS JWKS URL. Alternatively, pass `jwks_url` directly to the
+constructor. Both paths use bounded JWKS caching and do not follow redirects. The authenticator maps
+a standard space-delimited `scope` claim or list-valued `scp` claim onto the authenticated
+`Principal`. Set `scope_mapping` to translate identity-provider scopes to Gabby
 capabilities; when set, unmapped issuer scopes are dropped. A source scope may map to one capability
 or a tuple of capabilities. Without a mapping, scopes pass through unchanged. `create_app` can
 require separate capabilities for run and stream routes; bearer tokens can be assigned capabilities
@@ -1224,15 +1227,16 @@ token with repeatable `--bearer-scope` flags and require route capabilities with
 `--stream-scope`. Because the CLI configures one shared token, it cannot assign different
 capabilities to different callers; use embedded `create_app` with JWT or a custom authenticator for
 per-principal scope sets. For local development, explicitly pass `allow_unauthenticated=True`;
-`/health` remains public. Custom authenticators return a `Principal` with Gabby capability scopes or
-`None`. The concurrency cap is per process; it is not a distributed limit or request-rate limiter.
+`/health` remains public. Custom authenticators return a `Principal` with Gabby capability scopes,
+an optional trusted tenant ID, or `None`. The concurrency cap is per process; it is not a distributed
+limit or request-rate limiter.
 
 `JWTBearerAuthenticator` verifies a token against a host-configured issuer and audience and passes
-its verified scope set into `Principal`. The default policy engine can use `policies.scope_rules`
-to restrict tools and permissions and add configured persona guidance for matching scopes. Scope
-rules only narrow the agent's base `allowed_tools` and `allowed_permissions`; an unmatched caller is
-denied tools when any scope rule defines tool grants. Never trust identity or scopes supplied in the
-JSON request body.
+its verified scope set and optional tenant ID into `Principal`. The default policy engine can use
+`policies.scope_rules` to restrict tools and permissions and add configured persona guidance for
+matching scopes. Scope rules only narrow the agent's base `allowed_tools` and
+`allowed_permissions`; an unmatched caller is denied tools when any scope rule defines tool grants.
+Never trust identity or scopes supplied in the JSON request body.
 
 ```yaml
 tools: [lookup_record, redact_record]
