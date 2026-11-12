@@ -30,7 +30,7 @@ from .models import (
     ensure_model_request_size,
     ensure_model_response_size,
 )
-from .payload_filters import DefaultPayloadFilter, PayloadFilter
+from .payload_filters import PayloadFilter
 
 
 async def _apply_filters_request(
@@ -205,44 +205,6 @@ class FilteredModelProvider:
             if max_response_bytes is not None
             else DEFAULT_MAX_MODEL_RESPONSE_BYTES
         )
-        if len(self._filters) == 1 and type(self._filters[0]) is DefaultPayloadFilter:
-            # Only the exact built-in filter can run incrementally. Subclasses and host filters
-            # may need complete-response inspection, so they use the buffered path below.
-            used_bytes = 0
-            async for delta in method(**kwargs):
-                if not isinstance(delta, ModelStreamDelta):
-                    raise TypeError("model provider returned a malformed stream delta")
-                original_bytes = _stream_delta_bytes(delta, response_limit)
-                used_bytes += original_bytes
-                if used_bytes > response_limit:
-                    raise ModelResponseSizeError(
-                        f"Model response exceeded max_model_response_bytes={response_limit}"
-                    )
-                if delta.content_delta is not None:
-                    filtered = await _apply_filters_response(
-                        self._filters,
-                        response=ModelResponse(content=delta.content_delta),
-                        purpose=self._purpose,
-                    )
-                    delta = ModelStreamDelta(
-                        content_delta=filtered.content or "",
-                        tool_call_index=delta.tool_call_index,
-                        tool_call_id=delta.tool_call_id,
-                        tool_name_delta=delta.tool_name_delta,
-                        tool_arguments_delta=delta.tool_arguments_delta,
-                        finish_reason=delta.finish_reason,
-                        usage=delta.usage,
-                        provider_metadata=delta.provider_metadata,
-                    )
-                    used_bytes += _stream_delta_bytes(delta, response_limit) - original_bytes
-                    if used_bytes > response_limit:
-                        raise ModelResponseSizeError(
-                            "Filtered model response exceeded "
-                            f"max_model_response_bytes={response_limit}"
-                        )
-                yield delta
-            return
-
         deltas: list[ModelStreamDelta] = []
         used_bytes = 0
         async for delta in method(**kwargs):

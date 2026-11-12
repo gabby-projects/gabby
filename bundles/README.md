@@ -29,8 +29,17 @@ describe these source templates as pre-signed official packages. Never put the p
 repository. Consumers should verify package signatures against the published public key and confirm
 the release source before trusting that key.
 
-After downloading a release bundle, install the signed package and place its public key in the
-trusted-key directory:
+Download the `.gabskill` package, its matching `.gabskill.sig` sidecar, and the publisher's
+`<key-id>.pub` file from the same release. Keep the signature beside the package and place the
+public key in the trusted-key directory. For example, the files should be laid out like this:
+
+```text
+customer-support-triage-1.0.0.gabskill
+customer-support-triage-1.0.0.gabskill.sig
+trusted-publishers/undreamt-starter-v1.pub
+```
+
+Then install the package:
 
 ```sh
 mkdir -p ./skills ./trusted-publishers

@@ -235,13 +235,13 @@ class SignedAuditExporter:
 
     def _append_event(self, trace_id: str, agent_name: str, event: TraceEvent) -> None:
         """Serialize signing and synchronous filesystem operations off the event loop."""
-        if self._closed:
-            raise RuntimeError("SignedAuditExporter is closed")
         if os.getpid() != self._pid:
             raise RuntimeError("Construct SignedAuditExporter after starting worker processes")
         if not isinstance(trace_id, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", trace_id) is None:
             raise ValueError("trace_id must contain only letters, digits, underscores, or hyphens")
         with self._write_lock:
+            if self._closed:
+                raise RuntimeError("SignedAuditExporter is closed")
             self._append_record(trace_id, agent_name, event)
 
     def _append_record(self, trace_id: str, agent_name: str, event: TraceEvent) -> None:
@@ -417,6 +417,8 @@ class LFTraceExporter:
         self._max_tool_entries_per_trace = max_tool_entries_per_trace
         self._pending_trace_ttl_seconds = float(pending_trace_ttl_seconds)
         self._tool_entries: dict[str, tuple[float, list[dict[str, str]], bool]] = {}
+        self._dropped_traces: set[str] = set()
+        self._reject_untracked_traces = False
         self.dropped_trace_count = 0
 
     async def on_event(self, *, trace_id: str, agent_name: str, event: TraceEvent) -> None:
@@ -435,7 +437,15 @@ class LFTraceExporter:
         ]
         for pending_id in expired:
             self._tool_entries.pop(pending_id, None)
+            self._remember_dropped_trace(pending_id)
             self.dropped_trace_count += 1
+        terminal = event.kind in {"run_failed", "run_cancelled", "run_timed_out", "run_completed"}
+        if trace_id in self._dropped_traces:
+            if terminal:
+                self._dropped_traces.discard(trace_id)
+            return
+        if self._reject_untracked_traces and trace_id not in self._tool_entries:
+            return
         if event.kind in {"run_failed", "run_cancelled", "run_timed_out"}:
             self._tool_entries.pop(trace_id, None)
             return
@@ -453,6 +463,7 @@ class LFTraceExporter:
         state = self._tool_entries.get(trace_id)
         if state is None:
             if len(self._tool_entries) >= self._max_pending_traces:
+                self._remember_dropped_trace(trace_id)
                 self.dropped_trace_count += 1
                 return
             state = (now, [], False)
@@ -470,6 +481,17 @@ class LFTraceExporter:
                     )
                 entries.append(tool_entry)
         self._tool_entries[trace_id] = (now, entries, overflowed)
+
+    def _remember_dropped_trace(self, trace_id: str) -> None:
+        """Retain bounded tombstones so an omitted run cannot later become a partial record."""
+        if trace_id in self._dropped_traces or self._reject_untracked_traces:
+            return
+        if len(self._dropped_traces) >= self._max_pending_traces:
+            # At extreme overload, fail closed for unknown traces rather than risk signing an
+            # incomplete transcript. This latch is intentionally process-lifetime state.
+            self._reject_untracked_traces = True
+            return
+        self._dropped_traces.add(trace_id)
 
     def _write_record(self, trace_id: str, entries: list[dict[str, str]]) -> None:
         try:

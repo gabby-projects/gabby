@@ -65,6 +65,8 @@ type Client struct {
 	HTTP      *http.Client
 }
 
+const maxSSELineBytes = 4 * 1024 * 1024
+
 func New(baseURL, agentName string) (*Client, error) {
 	parsed, err := url.Parse(baseURL)
 	if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
@@ -121,7 +123,7 @@ func (c *Client) Stream(ctx context.Context, body Request, idempotencyKey, lastE
 	go func() {
 		defer close(events); defer close(errors); defer response.Body.Close()
 		scanner := bufio.NewScanner(response.Body)
-		scanner.Buffer(make([]byte, 4096), 1024*1024)
+		scanner.Buffer(make([]byte, 4096), maxSSELineBytes)
 		var data []string
 		var eventID string
 		flush := func() error {
