@@ -20,6 +20,10 @@ Gabby can sit behind an orchestration framework through its stateless HTTP and S
 orchestrator selects and schedules work; Gabby applies the selected agent's tool policy, approvals,
 sandbox rules, payload filters, and configured output/persona checks.
 
+For a host-owned pipeline that coordinates multiple configured Gabby services, see the
+[host-orchestrated pipeline guide](HOST_ORCHESTRATED_PIPELINES.md). This keeps workflow state and
+tenant routing in the host and is distinct from `AgentTool` parent/child composition within a run.
+
 ## MCP
 
 Install `gabby-agent-runtime[mcp]`. Agent YAML can configure Streamable HTTP MCP servers. Use HTTPS

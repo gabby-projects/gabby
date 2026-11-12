@@ -51,6 +51,8 @@ roadmap and scorecard separate implementation from release evidence.
   concurrency, and failure behavior.
 - [Extension guide](EXTENSIONS.md) — build providers, tools, retrievers, policies, and other
   replaceable components.
+- [Host-orchestrated multi-agent pipelines](HOST_ORCHESTRATED_PIPELINES.md) — coordinate separate
+  single-agent Gabby services with host-owned state, caller scopes, tenant retrieval, and recovery.
 - [API stability policy](API_STABILITY.md) — current pre-1.0 compatibility rules.
 - [Proposed compatibility contract](COMPATIBILITY.md) — candidate public contract for a future 1.0
   release; it is not in force during 0.x.

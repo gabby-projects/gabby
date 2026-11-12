@@ -145,3 +145,4 @@ decisions and do not imply that their specialized parsers remain in the runtime.
 - [Release-signed starter skill bundles](0127-release-signed-starter-skill-bundles.md)
 - [Optional warm sandbox container pool](0128-optional-warm-sandbox-container-pool.md)
 - [Template-generated language SDKs](0129-template-generated-language-sdks.md)
+- [Host-orchestrated multi-agent pipelines](0130-host-orchestrated-multi-agent-pipelines.md)
