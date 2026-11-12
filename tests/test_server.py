@@ -1688,6 +1688,8 @@ def test_bearer_token_validation_and_environment_loading(monkeypatch: pytest.Mon
         Principal(" ")
     with pytest.raises(ValueError, match="scope tokens"):
         Principal("caller", frozenset({"bad scope"}))
+    with pytest.raises(ValueError, match="tenant_id"):
+        Principal("caller", tenant_id=" tenant ")
 
 
 @pytest.mark.asyncio

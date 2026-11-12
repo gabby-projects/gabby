@@ -14,7 +14,7 @@ limitations under the License.
 Copyright 2026-present Gabby Contributors.
 -->
 
-# Host-Orchestrated Multi-Agent Pipelines
+# ADR 0130: Host-Orchestrated Multi-Agent Pipelines
 
 - **Status:** Accepted
 - **Date:** 2026-11-12
@@ -46,7 +46,8 @@ Document and provide a reference example for host-owned multi-agent orchestratio
 4. validate bounded structured routing output and independently authorize each stage;
 5. perform tenant-filtered retrieval in the host or a trusted host service and pass relevant text
    through `HostContext`;
-6. run authorized specialist agents concurrently when the operations are safe to parallelize;
+6. carry the host-verified tenant ID in short-lived signed worker tokens, bound retrieval latency,
+   and run independent authorized work concurrently;
 7. checkpoint bounded results and traces, recover only from matching workflow/request/agent
    revisions, and synthesize completed or partial results through a separate Gabby service.
 
@@ -59,15 +60,18 @@ workflow-wide budgets, retrieval authorization, side-effect idempotency, and fin
 
 - Resolve caller identity and tenant only from trusted host authentication. Never trust body fields,
   prompts, RAG text, or model-generated routing plans for identity or authorization.
-- Use short-lived JWTs with a fixed audience and least-privilege scopes for each service. Configure
-  route-level `run_scopes` and `stream_scopes`; configure `policies.scope_rules` to further narrow
-  the analyst's fixed tool and permission allowlists.
+- Use short-lived JWTs with a fixed audience and least-privilege scopes for each service. Include the
+  host-verified tenant as a signed `tenant_id` claim. Configure route-level `run_scopes` and
+  `stream_scopes`; configure `policies.scope_rules` to further narrow the analyst's fixed tool and
+  permission allowlists.
 - Keep endpoint URLs, agent names, JWT audiences, and deployment revisions in trusted deployment
   configuration. Do not allow model-directed endpoint selection.
 - Register only bounded, parameterized, read-only data tools for the analyst example. Derive tenant
-  predicates from the verified `Principal` available to the host tool handler.
+  predicates from the verified `Principal.tenant_id` available to the host tool handler, and fail
+  closed when it is absent or cannot be resolved.
 - Apply tenant filtering before retrieved content enters `HostContext`; bound and mark all retrieved
-  and worker content as untrusted evidence.
+  and worker content as untrusted evidence. Bound retrieval latency so an unavailable retriever
+  cannot prevent independent authorized analysis.
 - Protect checkpoint content with tenant partitioning, encryption, access controls, conditional
   writes, and retention/deletion policy. Do not persist credentials or raw prompts in ordinary
   traces or metadata.

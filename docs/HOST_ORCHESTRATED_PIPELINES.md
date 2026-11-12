@@ -74,11 +74,14 @@ the registered tools for its one agent.
    request-scoped personalization and evidence; it is not an identity or tenant authorization
    mechanism. The host owns retrieval and its storage. Gabby does not automatically make a
    request's snippets tenant-safe, and its local SQLite stores are not a distributed tenant router.
-5. **Run specialists.** Dispatch authorized RAG and analyst work concurrently. Each call gets a
-   short-lived, audience-specific JWT containing only `pipeline:run` plus the worker scope it needs.
-   The API authenticator verifies issuer, audience, signature, expiry, and subject; `run_scopes` and
-   `stream_scopes` protect their respective routes. The analyst service also applies its
-   `policies.scope_rules` to narrow its fixed tool and permission allowlists.
+5. **Run specialists.** Start tenant retrieval and authorized analyst work concurrently; start the
+   RAG agent after bounded retrieval completes. Each Gabby call gets a short-lived,
+   audience-specific JWT containing the host-verified `tenant_id` claim, `pipeline:run`, and only
+   the worker scope it needs. The API authenticator verifies issuer, audience, signature, expiry,
+   subject, and the optional tenant claim; `run_scopes` and `stream_scopes` protect their respective
+   routes. A finance tool must require `Principal.tenant_id` and resolve it to a tenant-specific
+   database predicate. The analyst service also applies its `policies.scope_rules` to narrow its
+   fixed tool and permission allowlists.
 6. **Checkpoint outcomes.** Save the bounded result, safe status, trace ID, request fingerprint,
    and workflow version under a tenant-partitioned stage key. The host—not Gabby—owns this durable
    state. Keep raw prompts and tool data out of ordinary logs. Encrypt sensitive checkpoint content,
@@ -105,8 +108,9 @@ on the next request.
 - On the analyst service, make the tool an application-owned, read-only aggregate such as
   `finance_summary`; do not ask the model to generate arbitrary SQL. Use a dedicated read-only
   database principal, parameterized queries, query timeouts, row limits, and tenant predicates.
-  Derive tenant identity from the authenticated `ToolContext.principal`, never from tool arguments,
-  prompt text, or `HostContext`.
+  Derive tenant identity from the authenticated `ToolContext.principal.tenant_id`, never from tool
+  arguments, prompt text, or `HostContext`. Reject calls if the tenant claim is missing or cannot
+  be resolved.
 - Run host retrieval with the authenticated tenant filter. Check document visibility before
   returning each snippet; treat its text and metadata as untrusted, and preserve source identifiers
   for citations. A prompt telling the model to ignore injected instructions is defense in depth,
@@ -126,7 +130,7 @@ on the next request.
 |---|---|
 | Invalid or unavailable triage | Stop before dispatch; return a typed, safe failure and retain no fabricated plan. |
 | Caller lacks a worker scope | Do not call that service; record `not_authorized`, and continue only with authorized work. |
-| Tenant retriever is unavailable or returns no evidence | Mark retrieval unavailable/empty; skip the RAG worker. The analyst may still run if authorized. |
+| Tenant retriever is unavailable, times out, or returns no evidence | Bound retrieval to a configured timeout (10 seconds by default, at most 300). Run independent analyst work concurrently; mark retrieval unavailable/empty and skip RAG on timeout or no evidence. |
 | One specialist times out or returns an API error | Record that stage as unavailable. Continue with other completed, authorized results and disclose the partial result during synthesis. |
 | No worker provides usable evidence | Return a deterministic host-generated partial/failure response without asking synthesis to invent an answer. |
 | Synthesis fails after specialists completed | Preserve successful stage checkpoints; retry synthesis under the host's retry policy without rerunning completed read-only workers. |
@@ -140,7 +144,8 @@ allowing retries; this reference pipeline's analyst is read-only.
 The example checkpoint interface does not implement leases or a database. The host must provide an
 atomic execution claim and a checkpoint store with tenant isolation, conditional writes, and durable
 consistency appropriate to its deployment. Do not use process-local dictionaries as production
-workflow state.
+workflow state. The example's retriever timeout cancels a pending retrieval and follows the
+unavailable path, leaving independent analyst work eligible to produce a partial answer.
 
 ## Budgets, concurrency, and observability
 
@@ -165,9 +170,11 @@ exports usage, compute it from provider-reported result metadata and label estim
 [`examples/host_orchestrated_pipeline/`](../examples/host_orchestrated_pipeline/) contains four
 agent configuration templates and a Python orchestration reference. The host must implement its
 token issuer, tenant retriever, checkpoint store, atomic execution claim, and registered finance
-tool. The reference code bounds handoffs, validates triage output again, uses fixed service
-endpoints, skips unauthorized workers, runs authorized specialists concurrently, reuses compatible
-successful checkpoints, and streams only the final synthesis stage.
+tool. The token issuer receives the verified caller tenant and must put it in the signed JWT
+`tenant_id` claim; `JWTBearerAuthenticator` exposes that claim through `Principal.tenant_id`. The
+reference code bounds handoffs and retrieval time, validates triage output again, uses fixed service
+endpoints, skips unauthorized workers, runs retrieval alongside independent analyst work, reuses
+compatible successful checkpoints, and streams only the final synthesis stage.
 
 It is an integration example rather than a complete production application: it does not provide a
 database, identity provider, secret manager, deployment manifests, distributed lease, workflow-wide

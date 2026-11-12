@@ -203,6 +203,34 @@ async def test_jwt_authenticator_verifies_identity_and_caches_signing_key(
 
 
 @pytest.mark.asyncio
+async def test_jwt_authenticator_exposes_verified_tenant_claim(
+    signing_material: tuple[Any, bytes],
+) -> None:
+    private_key, document = signing_material
+    authenticator = StaticJWKSAuthenticator(document)
+
+    principal = await authenticator.authenticate(
+        _request(_token(private_key, tenant_id="finance-eu"))
+    )
+
+    assert principal == Principal("user-123", tenant_id="finance-eu")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tenant_id", [None, "", " tenant ", "a\nb", "x" * 257])
+async def test_jwt_authenticator_rejects_malformed_tenant_claims(
+    signing_material: tuple[Any, bytes], tenant_id: Any
+) -> None:
+    private_key, document = signing_material
+
+    principal = await StaticJWKSAuthenticator(document).authenticate(
+        _request(_token(private_key, tenant_id=tenant_id))
+    )
+
+    assert principal is None
+
+
+@pytest.mark.asyncio
 async def test_jwt_revocation_checker_requires_jti_and_checks_each_request(
     signing_material: tuple[Any, bytes],
 ) -> None:

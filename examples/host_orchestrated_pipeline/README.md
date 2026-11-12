@@ -42,17 +42,24 @@ configured application instance:
 | Synthesis | [`agents/synthesis.yaml`](agents/synthesis.yaml) | `pipeline:run` on run and stream routes | None |
 
 Configure `JWTBearerAuthenticator` on each service with its own expected audience and an issuer
-that validates the host-minted token. Require `pipeline:run` with `run_scopes`; the synthesis
-service must also require `pipeline:run` with `stream_scopes`. Keep the analyst's base tool and
-permission allowlists narrow, and let `scope_rules` intersect them with the authenticated principal
-scopes. An API route scope only authorizes reaching that route; it does not replace tool policy.
+that validates the host-minted token. The host token issuer must include the trusted caller's
+`tenant_id` as a signed JWT claim as well as its subject and scopes. `JWTBearerAuthenticator`
+exposes that verified claim as `ToolContext.principal.tenant_id`; the analyst tool must fail closed
+when it is absent and resolve it through the host's tenant registry before querying data. Do not
+copy a tenant value from request JSON, prompt text, or tool arguments into the token. Require
+`pipeline:run` with `run_scopes`; the synthesis service must also require `pipeline:run` with
+`stream_scopes`. Keep the analyst's base tool and permission allowlists narrow, and let
+`scope_rules` intersect them with the authenticated principal scopes. An API route scope only
+authorizes reaching that route; it does not replace tool policy.
 
 The analyst YAML declares a tool name but does not provide its implementation. Register
 `finance_summary` when constructing the analyst `Agent`. It should accept a bounded business query
 or typed date range, use parameterized read-only aggregate queries, and derive the tenant predicate
-from the verified `ToolContext.principal`. Declare `permissions=("sql:finance_readonly",)` and a
-`context_parameter` on the `Tool`, then reject calls whose principal is missing or lacks the required
-scope. Do not accept arbitrary SQL or a caller-provided tenant identifier as a tool argument.
+from the verified `ToolContext.principal.tenant_id`, resolving that opaque ID through the host's
+tenant registry before querying. Declare `permissions=("sql:finance_readonly",)` and a
+`context_parameter` on the `Tool`, then reject calls whose principal or tenant is missing, or whose
+principal lacks the required scope. Do not accept arbitrary SQL or a caller-provided tenant
+identifier as a tool argument.
 
 Each service factory uses its own audience and one role-specific agent definition. For the analyst,
 the factory pattern is:
@@ -149,6 +156,10 @@ execution ID. Apply an HTTP request-size limit before parsing a potentially larg
 orchestrator validates its own task size and validates triage output again even though the triage
 agent has `output_schema`.
 
+The token issuer receives the already verified `tenant_id`; it must place that value in the signed
+`tenant_id` claim. All four worker calls receive that claim so host tools can enforce the same tenant
+boundary.
+
 ## Recovery and data retention
 
 The example saves an accepted marker, triage plan, bounded retrieval snippets, successful worker
@@ -165,7 +176,13 @@ correlation, but do not place tokens, raw task text, or caller PII in metadata o
 Per-agent YAML can cap tokens and estimated cost for each run. It does not enforce a single budget
 across triage, parallel workers, and synthesis. A hard workflow-wide budget requires a host-owned
 atomic reservation and usage-reconciliation ledger. For streamed synthesis, deltas are provisional;
-only persist a completed answer after the terminal completion event has been received.
+only persist a completed answer after the terminal completion event has been received. The example
+applies the same 12,000-byte output limit to streamed deltas and the saved answer, and rejects a
+completion whose bounded output does not match the streamed text.
+
+Retrieval defaults to a 10-second timeout (configurable up to 300 seconds) and runs concurrently
+with independent analyst work. A timeout cancels the pending retrieval and records the retrieval
+stage as unavailable, allowing an authorized analyst to return a partial result.
 
 See the [full architecture guide](../../docs/HOST_ORCHESTRATED_PIPELINES.md) for the security
 model, failure table, and deployment guidance.
