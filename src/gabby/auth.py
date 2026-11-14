@@ -288,7 +288,7 @@ class JWTBearerAuthenticator:
         except ImportError as exc:  # pragma: no cover - exercised without the optional extra
             raise ImportError(
                 "JWTBearerAuthenticator requires the optional dependency; "
-                "install gabby-agent-runtime[auth]"
+                "install gabby-ai[auth]"
             ) from exc
 
         self._jwt = jwt

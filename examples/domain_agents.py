@@ -102,6 +102,8 @@ def make_tool_agent(
             "allowed_tools": [tool.name],
             "max_steps": 3,
             "timeout_seconds": 5,
+            # These deterministic sample handlers are trusted in-process demo code.
+            "require_sandbox": False,
         },
     )
     return Agent(

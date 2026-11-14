@@ -16,8 +16,8 @@ name: pipeline-synthesis
 description: Synthesizes completed and partial specialist results for the host response.
 
 model:
-  provider: gemini
-  model: gemini-3.5-flash-lite
+  provider: openai_compatible
+  model: replace-with-model-id
 
 instructions: |
   Answer the caller using only the supplied request, host context, and worker results.

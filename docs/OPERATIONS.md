@@ -52,7 +52,7 @@ its separate JWKS and revocation-check timeouts.
 Set the model credential variable named by the agent's model configuration. Keep tokens and
 credentials in the deployment's secret manager or environment, never in agent YAML, skills, or
 container images. The CLI requires a bearer token for non-loopback binds. Embedded FastAPI hosts can
-use the optional `JWTBearerAuthenticator` from `gabby-agent-runtime[auth]`; configure its issuer
+use the optional `JWTBearerAuthenticator` from `gabby-ai[auth]`; configure its issuer
 and audience from deployment-owned settings. Call `await JWTBearerAuthenticator.from_oidc_issuer(...)`
 during async application startup to fetch bounded OIDC metadata and validate its issuer and HTTPS
 JWKS URL. Or provide a fixed HTTPS JWKS URL directly to the constructor. Discovery does not accept

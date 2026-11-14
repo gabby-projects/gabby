@@ -16,11 +16,14 @@ Copyright 2026-present Gabby Contributors.
 
 # Changelog
 
-User-visible changes are recorded here. Before the first release, entries are grouped under
-`Unreleased`; published releases use dated version headings.
+User-visible changes are recorded here. Unreleased work is grouped under its planned release;
+published releases use dated version headings.
 
 ## Unreleased
 
+### Planned 0.1.0 beta (`0.1.0b1`)
+
+- Renamed the Python distribution to `gabby-ai`; the import package and CLI remain `gabby`.
 - Removed Gabby's local Transformers model, embedding, and reranking loaders. Model execution now
   uses host-injected or hosted providers; RAG remains available through host-selected retrieval,
   embedding, and vector-store contracts.
@@ -44,7 +47,7 @@ User-visible changes are recorded here. Before the first release, entries are gr
 
 ## 0.1.0a1 — 2026-10-10
 
-This is Gabby's first planned public alpha. It is intended for developer evaluation and feedback;
+This was Gabby's first public alpha. It was intended for developer evaluation and feedback;
 the public extension API and operational behavior may change before 1.0. The implementation has
 extensive local contract coverage and release automation, but this alpha is not a production
 certification. Review the [threat model](docs/THREAT_MODEL.md), [operations guide](docs/OPERATIONS.md),

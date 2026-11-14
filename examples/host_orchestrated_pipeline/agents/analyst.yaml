@@ -16,8 +16,8 @@ name: pipeline-finance-analyst
 description: Performs read-only finance analysis through a host-registered bounded tool.
 
 model:
-  provider: gemini
-  model: gemini-3.5-flash-lite
+  provider: openai_compatible
+  model: replace-with-model-id
 
 instructions: |
   Perform read-only finance analysis. Do not request or invent raw SQL. Use the registered

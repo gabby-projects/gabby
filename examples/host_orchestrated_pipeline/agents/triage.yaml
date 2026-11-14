@@ -16,8 +16,8 @@ name: pipeline-triage
 description: Selects bounded specialist questions for a host-controlled workflow.
 
 model:
-  provider: gemini
-  model: gemini-3.5-flash-lite
+  provider: openai_compatible
+  model: replace-with-model-id
 
 instructions: |
   Classify the request and write a short question for each relevant specialist.

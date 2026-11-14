@@ -16,8 +16,10 @@ name: research-synthesizer
 description: Summarize caller-supplied research material with source-aware answers.
 
 model:
-  provider: gemini
-  model: gemini-3.5-flash-lite
+  provider: openai_compatible
+  model: replace-with-model-id
+  base_url: https://api.example.com/v1
+  api_key_env: MODEL_API_KEY
 
 environment:
   type: research

@@ -14,93 +14,89 @@ limitations under the License.
 Copyright 2026-present Gabby Contributors.
 -->
 
-# Runnable examples
+# Examples
 
-Run the offline domain examples from the repository root:
+These examples demonstrate Gabby's scope: configuring an agent runtime, enforcing tool and
+request boundaries, executing bounded work, and returning results or traces. They are learning
+materials, not production deployments. Host applications still own identity, durable state,
+tenant-aware data access, and deployment security.
+
+## Core runtime examples
+
+Run the deterministic examples from the repository root:
 
 ```sh
-uv run --frozen --extra server python examples/domain_agents.py
+uv run --frozen python examples/domain_agents.py
+uv run --frozen python examples/agent_composition.py
+uv run --frozen python examples/planning_revisions.py
 ```
 
-The script composes customer-support, research, and data-analysis agents from the same Gabby
-primitives. Each agent gets a small skill, a scoped environment, and an application-owned tool. A
-deterministic mock model requests the tool and uses its result, so the example needs no API key,
-network access, external service, or model download.
+These scripts use small local test doubles that implement Gabby's model-provider interface. They
+return scripted responses; they do not call an AI model, download weights, train or fine-tune a
+model, or demonstrate model manipulation. Their purpose is to make the runtime behavior repeatable
+without credentials or network access.
 
-The sample records are synthetic. Registered Python handlers are trusted code that runs in the
-Gabby process; production applications must implement their own data access and authorization
-boundaries. Replace `ExampleModel` with a built-in or custom `ModelProvider` to connect a real model.
+- [`domain_agents.py`](domain_agents.py) demonstrates agent definitions, skill activation,
+  schema-validated application tools, and per-run bounds across support, research, and data tasks.
+  Its records and tool handlers are synthetic examples; Python handlers are trusted host code unless
+  the application explicitly runs them through a supported sandbox.
+- [`agent_composition.py`](agent_composition.py) demonstrates explicit parent-to-specialist
+  delegation and trace correlation. It is a small in-process composition example, not a workflow
+  engine or durable multi-agent orchestrator.
+- [`planning_revisions.py`](planning_revisions.py) demonstrates an optional planner revising a
+  plan after a bounded tool observation.
+- [`approval_audit.py`](approval_audit.py) demonstrates a host-provided approval callback and the
+  content-minimizing SQLite audit helper. The printed callback is only a stand-in for an authenticated
+  reviewer interface.
 
-For a data agent that uses a real local database instead of a mock handler, run:
+For a real local database tool boundary, run:
 
 ```sh
 uv run --frozen python examples/sqlite_data_agent.py
 ```
 
-This example creates synthetic sales rows in a temporary SQLite file, grants only the
-`database:read` tool permission, executes a parameterized query, and removes the database after the
-agent run. Read the [SQLite data tool guide](../docs/SQLITE_DATA.md) before pointing it at an
-application database.
+[`sqlite_data_agent.py`](sqlite_data_agent.py) creates synthetic records in a temporary SQLite
+database, exposes a parameterized read-only query tool, and removes the data when it exits. SQLite
+is only the sample application's data source here; Gabby does not require applications to use
+SQLite. Read the [SQLite data tool guide](../docs/SQLITE_DATA.md) before adapting it.
 
-To run bounded Python analysis inside a per-run container without a model API key, use:
+For isolated Python tool execution, run:
 
 ```sh
 uv run --frozen python examples/python_sandboxed_agent.py
 ```
 
-This requires a local Docker daemon. Gabby pulls `python:3.14-slim` if needed, disables container
-network access, executes a deterministic calculation through `python_run_tool()`, and removes the
-container after the run. See the [sandboxed Python tool guide](../docs/PYTHON_TOOL.md).
+[`python_sandboxed_agent.py`](python_sandboxed_agent.py) requires a local Docker daemon and runs a
+bounded calculation in a per-run container. This demonstrates Gabby's configured sandbox boundary;
+it does not mean every registered Python handler is sandboxed automatically. See the
+[Python tool guide](../docs/PYTHON_TOOL.md).
 
-Run the offline parent/child composition example with:
+## Host integration examples
 
-```sh
-uv run --frozen python examples/agent_composition.py
-```
+[`host_orchestrated_pipeline/`](host_orchestrated_pipeline/) demonstrates a host coordinating four
+separate Gabby service calls: triage, a knowledge worker, a read-only analyst, and synthesis. The
+host owns routing, identity, tenant-scoped retrieval, durable checkpoints, and workflow-wide budget
+accounting. Its interfaces and YAML files are a reference template, not a standalone deployable
+system. The YAML model entries use the generic `openai_compatible` adapter with placeholder model
+IDs; configure each service for a supported provider and deployment-owned endpoint and credentials.
+Read its README and the [host orchestration guide](../docs/HOST_ORCHESTRATED_PIPELINES.md) before
+adapting it.
 
-It shows the parent granting `agent:invoke`, delegating one explicit task, and correlating the
-specialist's request trace to the parent run without forwarding parent context or memory. Both models
-are local deterministic examples; no network access or model credentials are needed.
-
-## Host-orchestrated multi-agent pipeline
-
-[`host_orchestrated_pipeline/`](host_orchestrated_pipeline/) contains a reference host coordinator
-and four per-agent YAML templates for triage, knowledge retrieval, read-only analysis, and
-synthesis. Unlike `agent_composition.py`, the host decides routing and parallel dispatch, supplies
-tenant-filtered context, and owns durable checkpoints. The reference requires host implementations
-of its token issuer, tenant retriever, checkpoint store, execution lease, and registered analyst
-tool; it is not a standalone demo. Read its README and the
-[host pipeline guide](../docs/HOST_ORCHESTRATED_PIPELINES.md) before adapting it to an application.
-
-To see a planner revise its plan after an order lookup, run:
-
-```sh
-uv run --frozen python examples/planning_revisions.py
-```
-
-The deterministic example prints a `plan_updated` event and a response based on the tool result.
-It needs no network access or model credentials. Set `policies.max_replans` to `0` to compare
-against the default single-plan behavior.
-
-## FastAPI service with a real model provider
-
-`hosted_service.py` is an embedded FastAPI app factory for one configured agent. It reads the agent
-path, API bearer token, and optional service limits from the host environment. The sample agent uses
-Hugging Face Inference Providers and a portable research skill; it has no host-side tools, so each
-request remains a stateless synthesis of caller-supplied context.
-
-Install the optional server dependency, set `HF_TOKEN` and a deployment-owned API token, then start
-the app from the repository root:
+[`hosted_service.py`](hosted_service.py) and [`hosted-agent.yaml`](hosted-agent.yaml) show an
+optional live-model setup using Gabby's generic OpenAI-compatible adapter. The YAML contains
+placeholder endpoint and model values: replace them with the endpoint and model ID for your chosen
+compatible service. Set the configured `MODEL_API_KEY` and a deployment-owned API token, then start
+the service:
 
 ```sh
 GABBY_AGENT_CONFIG=examples/hosted-agent.yaml \
 GABBY_API_TOKEN=replace-with-a-secret \
-HF_TOKEN=replace-with-a-hugging-face-token \
+MODEL_API_KEY=replace-with-a-provider-api-key \
 uv run --frozen --extra server uvicorn examples.hosted_service:create_app \
   --factory --host 127.0.0.1 --port 8787
 ```
 
-Check the public health route, then send an authenticated stateless execution request:
+Check health and make an authenticated run request:
 
 ```sh
 curl http://127.0.0.1:8787/health
@@ -110,23 +106,14 @@ curl http://127.0.0.1:8787/v1/agents/research-synthesizer/run \
   -d '{"input":"What does the research say about tree cover?","context":{"sources":[{"label":"sample-report.md","text":"Tree canopy increased by 8% between 2018 and 2024."}]}}'
 ```
 
-`GABBY_MAX_CONCURRENT_RUNS`, `GABBY_MAX_REQUEST_BYTES`, and `GABBY_MAX_RESPONSE_BYTES` can tune
-the corresponding per-process limits. The default bind above is loopback for a local check. For a
-hosted deployment, terminate TLS at a trusted ingress, restrict direct access to the app, provide
-secrets through the deployment secret manager, configure external rate limits and process
-supervision, and review the [operations guide](../docs/OPERATIONS.md). This sample uses a static
-single-tenant bearer token; hosts that need JWT validation can replace the authenticator with
-`JWTBearerAuthenticator`. A successful `GET /health` does not test the model provider; the run route
-does make a real provider call.
+The service sample uses one static bearer token for local demonstration. For deployment, use an
+appropriate authenticator, terminate TLS at a trusted ingress, provide credentials through a secret
+manager, and configure rate limits and process supervision. A successful health check does not test
+the inference provider; the run route does. See the [operations guide](../docs/OPERATIONS.md).
 
-## Stateless SSE consumer
-
-`stateless_sse_client.py` shows an external Python application consuming Gabby's typed SSE stream.
-The application supplies `input`, `context`, and `memory` for each request; the client keeps no
-conversation state in Gabby. Its HTTPX client owns transport lifecycle, and the bearer token is read
-from the host environment.
-
-With the service above running, invoke one streamed task from the repository root:
+[`stateless_sse_client.py`](stateless_sse_client.py) shows a Python host client sending input,
+context, and memory on each request and consuming Gabby's typed SSE events. Conversation history
+and durable user state remain with the host. With the service above running, try:
 
 ```sh
 GABBY_API_TOKEN=replace-with-a-secret \
@@ -137,17 +124,25 @@ uv run --frozen python examples/stateless_sse_client.py \
   'What does the research say about tree cover?'
 ```
 
-Set `GABBY_URL` when the service is not at `http://127.0.0.1:8787`. The client prints text deltas,
-reports typed progress event names on stderr, and prints the trace ID on completion. Context and
-memory are request inputs supplied by the consuming application; persist or update them there if
-later requests need state. It requires HTTPS for remote service URLs and allows HTTP only for
-loopback development.
+Set `GABBY_URL` when the service is not at `http://127.0.0.1:8787`. The client allows HTTP only
+for loopback development and requires HTTPS for remote service URLs.
 
-## Shared publisher revocation with Redis
+## Optional integrations
 
-[`redis_skill_revocation.py`](redis_skill_revocation.py) demonstrates the host-owned Redis client
-boundary and the shared `RedisSkillRevocationStore` management/check operations. Install
-`redis>=5`, set `GABBY_REDIS_URL`, and use the same namespaced Redis key from every Gabby process.
-The adapter requires Redis 6.2+ and does not own the client lifecycle. See the
-[multi-instance revocation operations guide](../docs/OPERATIONS.md#enforce-skill-publisher-revocations) for
-consistency, TLS, persistence, and rotation requirements.
+- [`redis_skill_revocation.py`](redis_skill_revocation.py) demonstrates using a host-owned Redis
+  client for shared publisher revocation across Gabby processes. Install `redis>=5`, set
+  `GABBY_REDIS_URL`, and use a Redis 6.2+ service. Redis is optional and is not Gabby's conversation
+  store. See the [operations guide](../docs/OPERATIONS.md#enforce-skill-publisher-revocations).
+- [`n8n/gabby-http-node.json`](n8n/gabby-http-node.json) is an importable HTTP Request node template
+  for an external n8n workflow. It is an adapter example, not an orchestration feature built into
+  Gabby. Configure the endpoint and authentication in n8n before use.
+
+## Model and provider references
+
+Gabby executes model calls through its `ModelProvider` interface, so examples that exercise the
+agent loop need either a deterministic test double or a configured inference provider. The offline
+examples contain mock provider classes solely to script reproducible behavior. The hosted service
+and host-pipeline templates use the generic OpenAI-compatible adapter with placeholders; adapt the
+configuration or inject a custom `ModelProvider` for other APIs. No example trains models, changes
+weights, loads model adapters, or requires a particular provider for Gabby's governance and
+tool-execution features.

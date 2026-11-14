@@ -57,7 +57,7 @@ def _signing_material() -> tuple[str, bytes, bytes]:
         public_key = signer.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
     except ImportError as exc:
         raise SkillPackageError(
-            "Install gabby-agent-runtime[skill-signing] to sign starter bundles"
+            "Install gabby-ai[skill-signing] to sign starter bundles"
         ) from exc
     except (ValueError, TypeError) as exc:
         raise SkillPackageError(

@@ -16,7 +16,7 @@ Copyright 2026-present Gabby Contributors.
 
 # Releasing Gabby
 
-Gabby publishes the `gabby-agent-runtime` distribution to PyPI through GitHub Actions Trusted
+Gabby publishes the `gabby-ai` distribution to PyPI through GitHub Actions Trusted
 Publishing. Release builds run the platform and quality checks before building the wheel and source
 distribution. The isolated build job creates a signed SLSA provenance attestation for both files and
 generates a CycloneDX SBOM from the locked runtime dependency graph. GitHub's OIDC-backed Sigstore
@@ -25,16 +25,17 @@ workflow artifact so the PyPI publisher receives only installable distributions.
 receives a separate OIDC token only after those checks pass and the `pypi` GitHub environment
 approves the deployment.
 
-The initial alpha uses the PEP 440 version `0.1.0a1`, which corresponds to the Git tag `v0.1.0a1`.
-This is a Python pre-release; package installers may require consumers to opt in to pre-release
-versions. The final `0.1.0` version is reserved for a later stable release after the alpha
-feedback and compatibility decisions are addressed.
+The first alpha was published as PEP 440 version `0.1.0a1`, corresponding to Git tag
+`v0.1.0a1`. The current planned beta uses version `0.1.0b1` and matching tag `v0.1.0b1`.
+Both are Python pre-releases; package installers may require consumers to opt in to pre-release
+versions. The final `0.1.0` version remains reserved for a later stable release after beta feedback
+and compatibility decisions are addressed.
 
 ## One-time repository setup
 
 1. Create a GitHub environment named `pypi` and require maintainer approval before deployment.
    Restrict deployments to version tags matching `v*`.
-2. Configure PyPI Trusted Publishing for the `gabby-agent-runtime` project with this GitHub owner,
+2. Configure PyPI Trusted Publishing for the `gabby-ai` project with this GitHub owner,
    repository, workflow filename `.github/workflows/release.yml`, and environment `pypi`.
 3. Protect the `main` branch and version tags so only maintainers can change release inputs.
 4. Do not add a PyPI API token to GitHub secrets. The publishing job uses GitHub OIDC.
@@ -48,9 +49,9 @@ for configuring the external trust relationship.
 1. Update `project.version` in `pyproject.toml` and add the release heading and notes to
    `CHANGELOG.md`.
 2. Merge the release commit into `main` and wait for normal CI to pass.
-3. Create and push the matching annotated tag, such as `v0.1.0a1`, on that commit. Python
-   alpha releases use a PEP 440 pre-release version so installers can distinguish them from a
-   final release and normally require an explicit pre-release opt-in.
+3. Create and push the matching annotated tag, such as `v0.1.0b1`, on that commit. Python
+   pre-releases use PEP 440 versions so installers can distinguish them from final releases and
+   normally require an explicit pre-release opt-in.
 4. The Release workflow repeats platform tests and quality gates for the tagged source, confirms the
    tag is on `main` and matches `project.version`, builds wheel and source distribution files,
    creates signed provenance attestations for both distributions, and generates and attests a
@@ -60,17 +61,17 @@ for configuring the external trust relationship.
 6. Download each PyPI distribution and verify its GitHub attestation, for example:
 
    ```sh
-   gh attestation verify dist/gabby_agent_runtime-<version>-py3-none-any.whl --repo OWNER/REPO
-   gh attestation verify dist/gabby_agent_runtime-<version>.tar.gz --repo OWNER/REPO
+   gh attestation verify dist/gabby_ai-<version>-py3-none-any.whl --repo OWNER/REPO
+   gh attestation verify dist/gabby_ai-<version>.tar.gz --repo OWNER/REPO
    ```
 
    Download the `gabby-runtime-sbom` artifact from the same Release workflow run and verify that its
    SBOM attestation is associated with each distribution:
 
    ```sh
-   gh attestation verify dist/gabby_agent_runtime-<version>-py3-none-any.whl \
+   gh attestation verify dist/gabby_ai-<version>-py3-none-any.whl \
      --repo OWNER/REPO --predicate-type https://cyclonedx.org/bom
-   gh attestation verify dist/gabby_agent_runtime-<version>.tar.gz \
+   gh attestation verify dist/gabby_ai-<version>.tar.gz \
      --repo OWNER/REPO --predicate-type https://cyclonedx.org/bom
    ```
 

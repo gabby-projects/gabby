@@ -30,7 +30,7 @@ def _client_type() -> Any:
         from mcp.client.session import ClientSession
         from mcp.client.streamable_http import streamable_http_client
     except ImportError as exc:
-        raise RuntimeError("MCP support requires gabby-agent-runtime[mcp]") from exc
+        raise RuntimeError("MCP support requires gabby-ai[mcp]") from exc
 
     @asynccontextmanager
     async def open_client(url: str) -> Any:
@@ -149,7 +149,7 @@ def create_mcp_server(
     try:
         from mcp.server.fastmcp import FastMCP
     except ImportError as exc:
-        raise RuntimeError("MCP support requires gabby-agent-runtime[mcp]") from exc
+        raise RuntimeError("MCP support requires gabby-ai[mcp]") from exc
 
     server = FastMCP(
         agent.definition.name,

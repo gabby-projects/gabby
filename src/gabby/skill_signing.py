@@ -54,7 +54,7 @@ def sign_skill_package(
 ) -> Path:
     """Sign an archive digest using a raw Ed25519 private key and write a detached sidecar.
 
-    Cryptographic support is optional. Install ``gabby-agent-runtime[skill-signing]`` to use it.
+    Cryptographic support is optional. Install ``gabby-ai[skill-signing]`` to use it.
     The private key is used in memory only and is never serialized into the signature document.
     """
     _validate_key_id(key_id)
@@ -65,7 +65,7 @@ def sign_skill_package(
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     except ImportError:
         raise SkillPackageError(
-            "Install gabby-agent-runtime[skill-signing] to sign skill packages"
+            "Install gabby-ai[skill-signing] to sign skill packages"
         ) from None
     try:
         signer = Ed25519PrivateKey.from_private_bytes(private_key)
@@ -183,7 +183,7 @@ def _verify_skill_package_signature_details(
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
     except ImportError:
         raise SkillPackageError(
-            "Install gabby-agent-runtime[skill-signing] to verify skill signatures"
+            "Install gabby-ai[skill-signing] to verify skill signatures"
         ) from None
     try:
         verifier = Ed25519PublicKey.from_public_bytes(public_key)
@@ -358,7 +358,7 @@ def _verify_content_signature(
         )
     except ImportError:
         raise SkillPackageError(
-            "Install gabby-agent-runtime[skill-signing] to verify skill signatures"
+            "Install gabby-ai[skill-signing] to verify skill signatures"
         ) from None
     except (InvalidSignature, ValueError, binascii.Error):
         raise SkillPackageError("Skill package signature verification failed") from None

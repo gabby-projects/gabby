@@ -89,33 +89,50 @@ Gabby’s controls are not all enabled by default. Skill signing is optional, sa
 
 ## Quick start
 
-Clone the repository, then sync the locked development environment:
+Clone the repository and install Gabby from the checkout in editable mode. This installs the
+distribution as `gabby-ai`, while the Python import and command-line tool remain `gabby`. Editable
+installation means changes you make in this checkout are used immediately:
 
 ```sh
 git clone https://github.com/undreamt-oss/gabby.git
 cd gabby
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[server,auth]"
+```
+
+On Windows PowerShell, activate the environment with `.\.venv\Scripts\Activate.ps1` instead of
+`source .venv/bin/activate`.
+
+To install the full contributor environment and run the checks, use the locked development setup:
+
+```sh
 uv sync --frozen --group dev --extra server --extra auth
+uv run pytest
 ```
 
 Create a starter agent and inspect its configuration:
 
 ```sh
-uv run gabby init --template customer-support ./agent.yaml
-uv run gabby validate ./agent.yaml
+gabby init --template customer-support ./agent.yaml
+gabby validate ./agent.yaml
 ```
 
 Edit `agent.yaml` to choose a model and configure the agent’s instructions, skills, tools, and policies. Keep credentials outside the file. For example, set the configured provider’s API key in the environment, then run:
 
 ```sh
 export MODEL_API_KEY="..."
-uv run gabby run ./agent.yaml "Summarize this request"
+gabby run ./agent.yaml "Summarize this request"
 ```
+
+In Windows PowerShell, set the variable with `$env:MODEL_API_KEY = "..."` before running Gabby.
 
 The generated starter uses a placeholder model and grants no tools by default. Add the correct provider credential variable and explicitly register tools in the consuming application before granting them to an agent. See the [complete user guide](docs/README_GUIDE.md) for provider-specific setup, configuration, tools, skills, knowledge, Python embedding, API serving, and deployment.
 
 ## Project status
 
-Gabby is pre-1.0 alpha software. Public extension APIs may change before v1.0. Local tests and static checks establish only the behaviors they exercise; they do not certify a hosted deployment, every provider/model pairing, or every container host and engine combination. Review the [release notes](CHANGELOG.md), [readiness scorecard](docs/PROJECT_SCORECARD.md), and [threat model](docs/THREAT_MODEL.md) before evaluating it for sensitive or production workloads.
+Gabby is pre-1.0 beta software (`0.1.0b1`). Public extension APIs may change before v1.0. Local tests and static checks establish only the behaviors they exercise; they do not certify a hosted deployment, every provider/model pairing, or every container host and engine combination. Review the [release notes](CHANGELOG.md), [readiness scorecard](docs/PROJECT_SCORECARD.md), and [threat model](docs/THREAT_MODEL.md) before evaluating it for sensitive or production workloads.
 
 ## Open source and contributing
 

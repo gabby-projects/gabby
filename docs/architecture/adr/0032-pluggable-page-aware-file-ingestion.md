@@ -62,6 +62,6 @@ or pypdf internal representation.
 
 `FileIngestor` and the parser protocol are pre-1.0 API additions. `TextFileIngestor` remains an
 alias. Tests cover page citation metadata, mixed directory ingestion, deterministic replacement,
-malformed PDF rejection, and page/output bounds. Install `gabby-agent-runtime[pdf]` to use the
+malformed PDF rejection, and page/output bounds. Install `gabby-ai[pdf]` to use the
 built-in PDF parser. See the [file-ingestion guide](../../../README.md#knowledge-retrieval) and
 [threat model](../../THREAT_MODEL.md).
