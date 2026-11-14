@@ -27,7 +27,7 @@ uv sync --frozen --group dev --extra server --extra auth
 Use `uv run` for project commands so the locked virtual environment is selected consistently. The `server` extra installs Uvicorn for `gabby serve`; embedded users can install the core package without the server process.
 
 When the alpha package is published, install this pre-release explicitly with
-`python -m pip install --pre gabby-agent-runtime`. Pip excludes pre-release versions from ordinary
+`python -m pip install --pre gabby-ai`. Pip excludes pre-release versions from ordinary
 version selection unless a pre-release is requested; see the [Python Packaging User Guide](https://packaging.python.org/en/latest/discussions/versioning/).
 
 ## Define an agent
@@ -1179,7 +1179,7 @@ For a Kubernetes reference with a ClusterIP service, NGINX TLS ingress, pod secu
 bounds, and NetworkPolicy, see [the Kubernetes deployment guide](../docs/DEPLOYMENT_KUBERNETES.md).
 
 For deployments issuing signed JWT access tokens, install with
-`python -m pip install 'gabby-agent-runtime[auth]'`, then configure an issuer and audience. The
+`python -m pip install 'gabby-ai[auth]'`, then configure an issuer and audience. The
 authenticator can use a fixed HTTPS JWKS endpoint or discover it from the configured OIDC issuer:
 
 ```python

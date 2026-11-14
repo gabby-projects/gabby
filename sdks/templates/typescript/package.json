@@ -1,6 +1,6 @@
 {
   "name": "@undreamt-oss/gabby-client",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-beta.1",
   "description": "Lightweight TypeScript HTTP and SSE client for Gabby",
   "type": "module",
   "main": "dist/index.js",

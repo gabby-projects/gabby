@@ -125,7 +125,7 @@ runtime emits the first text delta. See [ADR 0055](architecture/adr/0055-bounded
 The built-in `BearerTokenAuthenticator` is for a simple single-tenant service and can attach
 configured scopes to its principal. The optional `JWTBearerAuthenticator` verifies a signed token
 against a configured issuer, audience, HTTPS JWKS endpoint, and asymmetric algorithm allowlist;
-install `gabby-agent-runtime[auth]` to use it. JWT authentication returns the validated subject and
+install `gabby-ai[auth]` to use it. JWT authentication returns the validated subject and
 reads the standard space-delimited `scope` claim or list-valued `scp` claim. Set its optional
 `scope_mapping` to translate exact issuer scopes to one or more Gabby capabilities; unmapped issuer
 scopes are dropped when a mapping is configured. With no mapping, scopes pass through unchanged.

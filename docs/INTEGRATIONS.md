@@ -26,7 +26,7 @@ tenant routing in the host and is distinct from `AgentTool` parent/child composi
 
 ## MCP
 
-Install `gabby-agent-runtime[mcp]`. Agent YAML can configure Streamable HTTP MCP servers. Use HTTPS
+Install `gabby-ai[mcp]`. Agent YAML can configure Streamable HTTP MCP servers. Use HTTPS
 outside loopback, and explicitly allowlist every remote tool:
 
 ```yaml
@@ -60,7 +60,7 @@ the MCP server and the agent.
 
 ## OpenTelemetry and signed audit evidence
 
-Install `gabby-agent-runtime[opentelemetry]` and configure an OTLP endpoint:
+Install `gabby-ai[opentelemetry]` and configure an OTLP endpoint:
 
 ```python
 tracer, provider = create_otlp_tracer(endpoint="https://otel.example.com/v1/traces")
@@ -78,13 +78,13 @@ prompts, tool arguments, and model output. The host owns exporter/provider shutd
 `SignedAuditExporter` writes JSONL records linked by SHA-256 hashes and signed with Ed25519. It
 records successful tool-policy decisions, explicit policy denials, and persona-verifier outcomes,
 without recording prompts, tool arguments, verifier details, or model output. Install
-`gabby-agent-runtime[skill-signing]`; provide a protected 32-byte private key. It verifies a
+`gabby-ai[skill-signing]`; provide a protected 32-byte private key. It verifies a
 pre-existing chain before appending. Anchor exported chain heads outside the process if you need to
 detect full-file replacement. Call `exporter.close()` during host shutdown to release its
 writer ownership. A single exporter must own a given audit path; a second active writer for the
 same resolved path is rejected so concurrent processes cannot fork the hash chain.
 
-For LF TRACE v0.2 Trust Records, install `gabby-agent-runtime[trace]` and configure
+For LF TRACE v0.2 Trust Records, install `gabby-ai[trace]` and configure
 `LFTraceExporter(directory, claims=..., private_key=..., audit_exporter=...)`. Supply the signed
 deployment claims (`subject`, `model`, `runtime`, `policy`, `data_class`, `build_provenance`, and
 `appraisal`) from trusted deployment evidence. The exporter derives the tool-transcript hash from
@@ -99,7 +99,7 @@ invent deployment claims to make schema validation pass.
 
 ## Orchestrator helpers
 
-Install `gabby-agent-runtime[crewai]` for CrewAI. LangGraph needs no additional Gabby dependency:
+Install `gabby-ai[crewai]` for CrewAI. LangGraph needs no additional Gabby dependency:
 
 ```python
 node = langgraph_node(gabby_client, input_key="task", output_key="review")

@@ -34,6 +34,11 @@ host integration, not a deployable production service.
 Each YAML file configures one agent and should be deployed as a separate service or separately
 configured application instance:
 
+The templates use Gabby's generic OpenAI-compatible adapter and a placeholder model ID. Before
+deploying, configure the model ID, API endpoint, and credentials for the inference provider selected
+by the host. The pipeline's orchestration and governance boundaries do not depend on a specific
+provider.
+
 | Role | Definition | API capability | Tools |
 |---|---|---|---|
 | Triage | [`agents/triage.yaml`](agents/triage.yaml) | `pipeline:run` | None |

@@ -14,7 +14,7 @@
 
 [package]
 name = "gabby-client"
-version = "0.1.0-alpha.1"
+version = "0.1.0-beta.1"
 edition = "2021"
 license = "Apache-2.0"
 description = "Lightweight HTTP and SSE client for Gabby"

@@ -244,7 +244,7 @@ async def test_hosted_service_factory_loads_config_and_requires_bearer_auth(
 ) -> None:
     monkeypatch.setenv("GABBY_AGENT_CONFIG", str(ROOT / "examples" / "hosted-agent.yaml"))
     monkeypatch.setenv("GABBY_API_TOKEN", "hosted-example-secret")
-    monkeypatch.setenv("HF_TOKEN", "model-token-for-construction-only")
+    monkeypatch.setenv("MODEL_API_KEY", "model-token-for-construction-only")
 
     app = create_app()
     async with (

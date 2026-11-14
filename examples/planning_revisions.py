@@ -113,6 +113,8 @@ async def main() -> None:
                 "max_steps": 3,
                 "max_replans": 1,
                 "timeout_seconds": 5,
+                # This deterministic sample handler is trusted in-process demo code.
+                "require_sandbox": False,
             },
         ),
         model=provider,

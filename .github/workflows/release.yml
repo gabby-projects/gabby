@@ -240,7 +240,7 @@ jobs:
     timeout-minutes: 10
     environment:
       name: pypi
-      url: https://pypi.org/p/gabby-agent-runtime
+      url: https://pypi.org/p/gabby-ai
     permissions:
       contents: read
       id-token: write

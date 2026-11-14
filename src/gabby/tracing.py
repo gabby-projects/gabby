@@ -118,7 +118,7 @@ class CompositeTracer:
 class OpenTelemetryTracer:
     """Export Gabby trace events as OpenTelemetry spans.
 
-    Install ``gabby-agent-runtime[opentelemetry]`` and pass an SDK tracer. Only event
+    Install ``gabby-ai[opentelemetry]`` and pass an SDK tracer. Only event
     names, durations, and caller-selected safe attributes are exported; event payloads
     are intentionally omitted because they can contain user data or secrets.
     """
@@ -129,7 +129,7 @@ class OpenTelemetryTracer:
                 from opentelemetry import trace
             except ImportError as exc:
                 raise RuntimeError(
-                    "OpenTelemetry support requires gabby-agent-runtime[opentelemetry]"
+                    "OpenTelemetry support requires gabby-ai[opentelemetry]"
                 ) from exc
             tracer = trace.get_tracer("gabby")
         if not callable(getattr(tracer, "start_as_current_span", None)):
@@ -184,7 +184,7 @@ def create_otlp_tracer(
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
     except ImportError as exc:
-        raise RuntimeError("OTLP export requires gabby-agent-runtime[opentelemetry]") from exc
+        raise RuntimeError("OTLP export requires gabby-ai[opentelemetry]") from exc
     provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
     provider.add_span_processor(
         BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, headers=headers))
@@ -206,7 +206,7 @@ class SignedAuditExporter:
             from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         except ImportError as exc:
             raise RuntimeError(
-                "Signed audit export requires gabby-agent-runtime[skill-signing]"
+                "Signed audit export requires gabby-ai[skill-signing]"
             ) from exc
         if not isinstance(private_key, bytes) or len(private_key) != 32:
             raise ValueError("private_key must be a 32-byte Ed25519 private key")
@@ -498,7 +498,7 @@ class LFTraceExporter:
             import rfc8785
             from agentrust_trace import sign_record
         except ImportError as exc:
-            raise RuntimeError("LF TRACE export requires gabby-agent-runtime[trace]") from exc
+            raise RuntimeError("LF TRACE export requires gabby-ai[trace]") from exc
         if re.fullmatch(r"[A-Za-z0-9_-]{1,128}", trace_id) is None:
             raise ValueError("trace_id must contain only letters, digits, underscores, or hyphens")
         transcript_hash = hashlib.sha256(rfc8785.dumps(entries)).hexdigest()
